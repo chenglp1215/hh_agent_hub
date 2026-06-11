@@ -30,6 +30,14 @@ from api.v1.workflows import router as workflows_router
 router.include_router(workflows_router)
 
 
+from api.v1.apps import router as apps_router
+router.include_router(apps_router)
+
+
+from api.v1.chat import router as chat_router
+router.include_router(chat_router)
+
+
 @router.get("/ping")
 async def ping():
     return {"ping": "pong"}

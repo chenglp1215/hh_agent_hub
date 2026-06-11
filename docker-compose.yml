@@ -57,19 +57,20 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: python -c "
-import asyncio
-from backend.config import TORTOISE_ORM
-from tortoise import Tortoise
-from loguru import logger
+    command: >
+      python -c "
+      import asyncio
+      from backend.config import TORTOISE_ORM
+      from tortoise import Tortoise
+      from loguru import logger
 
-async def main():
-    await Tortoise.init(config=TORTOISE_ORM)
-    logger.info('Worker ready, waiting for tasks...')
-    await asyncio.Event().wait()
+      async def main():
+          await Tortoise.init(config=TORTOISE_ORM)
+          logger.info('Worker ready, waiting for tasks...')
+          await asyncio.Event().wait()
 
-asyncio.run(main())
-"
+      asyncio.run(main())
+      "
     environment:
       - DB_HOST=mysql
       - DB_PORT=3306

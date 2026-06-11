@@ -1,0 +1,223 @@
+from typing import TypedDict, List, Any, Dict, Optional
+from langgraph.graph import StateGraph, END
+from loguru import logger
+
+
+class AgentState(TypedDict):
+    user_input: str
+    messages: List[Any]
+    current_agent: str
+    next_agent: str
+    intermediate_results: Dict[str, Any]
+    final_answer: str
+    need_human: bool
+    human_input: str
+    error: Optional[str]
+
+
+class WorkflowEngine:
+    """LangGraph 工作流编排引擎"""
+
+    def __init__(self):
+        pass
+
+    async def build_workflow(self, workflow_config: Dict[str, Any],
+                             agent_nodes: Dict[str, Any]):
+        """根据工作流配置和 Agent 节点构建 LangGraph
+
+        Args:
+            workflow_config: 工作流配置字典，包含 flow_type, supervisor_agent_id,
+                            worker_agent_ids, edges, parallel_groups, human_interrupts
+            agent_nodes: Agent 名称到节点函数的映射字典
+
+        Returns:
+            编译后的 LangGraph StateGraph（可调用 compiled.ainvoke 执行）
+
+        Raises:
+            ValueError: 不支持的 flow_type 或缺少必要节点
+        """
+        flow_type = workflow_config.get("flow_type", "sequential")
+
+        if flow_type == "supervisor":
+            return await self._build_supervisor(workflow_config, agent_nodes)
+        elif flow_type == "sequential":
+            return await self._build_sequential(workflow_config, agent_nodes)
+        elif flow_type == "graph":
+            return await self._build_graph(workflow_config, agent_nodes)
+        else:
+            raise ValueError(f"Unsupported flow type: {flow_type}")
+
+    async def _build_supervisor(self, config: Dict[str, Any],
+                                agent_nodes: Dict[str, Any]):
+        """监督者模式：Supervisor Agent 路由任务到 Worker Agents
+
+        Supervisor Agent 收到用户输入后，决定将任务路由给哪个 Worker Agent，
+        Worker Agent 执行完毕后将结果返回 Supervisor，由其决定下一步路由或结束。
+
+        Args:
+            config: 工作流配置，需包含 supervisor_agent_name 和 worker_agent_ids
+            agent_nodes: Agent 名称到节点函数的映射
+
+        Returns:
+            编译后的 LangGraph StateGraph
+        """
+        supervisor_name = config.get("supervisor_agent_name", "supervisor")
+        supervisor_node = agent_nodes.get(supervisor_name)
+
+        if not supervisor_node:
+            raise ValueError(f"Supervisor agent '{supervisor_name}' not found in agent_nodes")
+
+        graph = StateGraph(AgentState)
+
+        # Add supervisor node
+        graph.add_node("supervisor", supervisor_node)
+
+        # Add worker nodes and connect them back to supervisor
+        worker_names = []
+        for name in config.get("worker_agent_ids", []):
+            if isinstance(name, int):
+                continue  # Skip raw IDs (should be resolved to names by caller)
+            if name in agent_nodes:
+                graph.add_node(name, agent_nodes[name])
+                graph.add_edge(name, "supervisor")
+                worker_names.append(name)
+
+        # Supervisor routing: use next_agent from state to decide where to route
+        async def route_supervisor(state: AgentState) -> str:
+            next_agent = state.get("next_agent", "end")
+            if next_agent == "end" or next_agent == END:
+                return END
+            if next_agent in worker_names:
+                return next_agent
+            return END
+
+        graph.add_conditional_edges("supervisor", route_supervisor)
+        graph.set_entry_point("supervisor")
+
+        compiled = graph.compile()
+        logger.info(f"Supervisor workflow built: supervisor={supervisor_name}, workers={worker_names}")
+        return compiled
+
+    async def _build_sequential(self, config: Dict[str, Any],
+                                agent_nodes: Dict[str, Any]):
+        """顺序模式：Agent 按流水线顺序依次执行
+
+        每个 Agent 的输出自动传递给下一个 Agent 作为输入上下文。
+
+        Args:
+            config: 工作流配置，需包含 worker_agent_ids（有序列表）
+            agent_nodes: Agent 名称到节点函数的映射
+
+        Returns:
+            编译后的 LangGraph StateGraph
+        """
+        agent_names = config.get("worker_agent_ids", [])
+
+        graph = StateGraph(AgentState)
+        previous_name = None
+
+        for i, name in enumerate(agent_names):
+            if isinstance(name, int):
+                continue
+            node_fn = agent_nodes.get(name)
+            if not node_fn:
+                logger.warning(f"Agent '{name}' not found, skipping")
+                continue
+
+            node_id = f"agent_{i}_{name}"
+            graph.add_node(node_id, node_fn)
+
+            if previous_name:
+                graph.add_edge(previous_name, node_id)
+            previous_name = node_id
+
+        if previous_name:
+            graph.add_edge(previous_name, END)
+            graph.set_entry_point(f"agent_0_{agent_names[0]}")
+        else:
+            raise ValueError("No valid agent nodes found for sequential workflow")
+
+        compiled = graph.compile()
+        logger.info(f"Sequential workflow built: {len(agent_names)} agents")
+        return compiled
+
+    async def _build_graph(self, config: Dict[str, Any],
+                           agent_nodes: Dict[str, Any]):
+        """图模式：自定义有向图，按 edges 定义连接
+
+        支持三种边类型：
+        - normal: 普通有向边，from -> to
+        - conditional: 条件边，根据 condition_field 的值选择路由
+        - start/end: 特殊节点标识入口和出口
+
+        Args:
+            config: 工作流配置，需包含 edges 列表，每项含 from, to, type 等字段
+            agent_nodes: Agent 名称到节点函数的映射
+
+        Returns:
+            编译后的 LangGraph StateGraph
+        """
+        edges: List[Dict] = config.get("edges", [])
+
+        graph = StateGraph(AgentState)
+
+        # Collect unique node names from edges
+        node_names: set = set()
+        for edge in edges:
+            node_names.add(edge.get("from", ""))
+            node_names.add(edge.get("to", ""))
+
+        # Add agent nodes
+        for name in node_names:
+            if name == "start" or name == "end" or not name:
+                continue
+            if name in agent_nodes:
+                graph.add_node(name, agent_nodes[name])
+
+        # Process edges
+        conditional_routes: Dict[str, List[Dict]] = {}
+
+        for edge in edges:
+            from_node = edge.get("from", "")
+            to_node = edge.get("to", "")
+            edge_type = edge.get("type", "normal")
+
+            if from_node == "start":
+                if to_node != "end":
+                    graph.set_entry_point(to_node)
+            elif to_node == "end":
+                if edge_type == "normal":
+                    graph.add_edge(from_node, END)
+            elif edge_type == "conditional":
+                if from_node not in conditional_routes:
+                    conditional_routes[from_node] = []
+                conditional_routes[from_node].append(edge)
+            else:
+                graph.add_edge(from_node, to_node)
+
+        # Add conditional edges
+        for from_node, routes in conditional_routes.items():
+            condition_field = routes[0].get("condition_field", "")
+
+            async def make_router(field: str, route_list: List[Dict]):
+                async def router(state: AgentState) -> str:
+                    field_value = state.get(field, "")
+                    for route in route_list:
+                        if route.get("condition") == str(field_value) or route.get("condition") == "true":
+                            target = route.get("to", "")
+                            if target == "end":
+                                return END
+                            return target
+                    return END
+
+                return router
+
+            route_fn = await make_router(condition_field, routes)
+            graph.add_conditional_edges(from_node, route_fn)
+
+        compiled = graph.compile()
+        logger.info(f"Graph workflow built: {len(edges)} edges, {len(node_names)} nodes")
+        return compiled
+
+
+workflow_engine = WorkflowEngine()

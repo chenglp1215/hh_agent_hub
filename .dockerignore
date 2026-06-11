@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+venv
+.venv
+*.egg-info
+
+# Node
+node_modules
+frontend/node_modules
+frontend/dist
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+
+# Logs
+logs/
+*.log
+
+# Data
+data/
+
+# Docs (not needed in image)
+system_design_docs/
+docs/
+*.md
+!requirements.txt

@@ -1,0 +1,149 @@
+# ============================================
+# 多Agent协同平台 - Docker Compose 部署
+# 5 容器: frontend + main + worker + mysql + redis
+# ============================================
+version: "3.8"
+
+services:
+  # ============================================
+  # Nginx 前端 (静态文件 + 反向代理)
+  # ============================================
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - main
+    restart: unless-stopped
+    networks:
+      - agent-net
+
+  # ============================================
+  # FastAPI 主服务 (CRUD API + WebSocket + Auth)
+  # ============================================
+  main:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=${DB_USER:-agent_platform}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme}
+      - DB_NAME=${DB_NAME:-agent_platform}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-change-me-to-random-secret}
+      - FERNET_KEY=${FERNET_KEY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - workspace_data:/data/workflow_workspaces
+      - ./logs:/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - agent-net
+
+  # ============================================
+  # Worker (工作流执行 + MCP Client + LangGraph)
+  # ============================================
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -c "
+import asyncio
+from backend.config import TORTOISE_ORM
+from tortoise import Tortoise
+from loguru import logger
+
+async def main():
+    await Tortoise.init(config=TORTOISE_ORM)
+    logger.info('Worker ready, waiting for tasks...')
+    await asyncio.Event().wait()
+
+asyncio.run(main())
+"
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=${DB_USER:-agent_platform}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme}
+      - DB_NAME=${DB_NAME:-agent_platform}
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - workspace_data:/data/workflow_workspaces
+      - ./logs:/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+    networks:
+      - agent-net
+
+  # ============================================
+  # MySQL 8.0
+  # ============================================
+  mysql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-rootpass}
+      - MYSQL_DATABASE=${DB_NAME:-agent_platform}
+      - MYSQL_USER=${DB_USER:-agent_platform}
+      - MYSQL_PASSWORD=${DB_PASSWORD:-changeme}
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-authentication-plugin=mysql_native_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpass}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - agent-net
+
+  # ============================================
+  # Redis 7
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - agent-net
+
+# ============================================
+# 网络
+# ============================================
+networks:
+  agent-net:
+    driver: bridge
+
+# ============================================
+# 持久化卷
+# ============================================
+volumes:
+  mysql_data:
+  redis_data:
+  workspace_data:

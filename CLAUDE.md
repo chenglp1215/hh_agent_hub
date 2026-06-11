@@ -113,9 +113,24 @@ source venv/bin/activate  # Linux/Mac
 venv\Scripts\activate     # Windows
 pip install -r requirements.txt
 
-# Development server
-python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# Development server (backend)
+cd backend && uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-# Database backup
-sqlite3 /data/agent_platform.db ".backup '/backup/agent_platform_$(date +%Y%m%d).db'"
+# Development server (frontend)
+cd frontend && npm run dev
+
+# Database (MySQL)
+mysql -u root -e "CREATE DATABASE IF NOT EXISTS agent_platform CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+# Migration
+cd backend && aerich upgrade
+
+# Docker deployment
+docker compose up -d              # 启动所有服务
+docker compose up -d --build      # 重新构建并启动
+docker compose ps                 # 查看服务状态
+docker compose logs -f main       # 查看 main 服务日志
+docker compose logs -f worker     # 查看 worker 日志
+docker compose scale worker=3     # 扩展 worker 实例
+docker compose down               # 停止服务
 ```

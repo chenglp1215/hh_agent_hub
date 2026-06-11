@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+:root {
+  --color-bg: #010102;
+  --color-surface: #0a0a0b;
+  --color-accent: #5e6ad2;
+  --color-border: #1e1e20;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: #e1e1e1;
+  font-family: 'SF Pro Display', 'Inter', -apple-system, sans-serif;
+}
+
+/* Ant Design dark theme overrides */
+.ant-layout { background: var(--color-bg) !important; }
+.ant-layout-sider { background: var(--color-bg) !important; }
+.ant-menu-dark { background: var(--color-bg) !important; }
+.ant-card { background: var(--color-surface) !important; border-color: var(--color-border) !important; }
+.ant-table { background: var(--color-surface) !important; }
+.ant-input, .ant-select-selector, .ant-picker { background: #1a1a1c !important; border-color: var(--color-border) !important; color: #e1e1e1 !important; }

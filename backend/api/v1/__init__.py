@@ -38,6 +38,18 @@ from api.v1.chat import router as chat_router
 router.include_router(chat_router)
 
 
+from api.v1.traces import router as traces_router
+router.include_router(traces_router)
+
+
+from api.v1.metrics import router as metrics_router
+router.include_router(metrics_router)
+
+
+from api.v1.ws import router as ws_router
+router.include_router(ws_router)
+
+
 @router.get("/ping")
 async def ping():
     return {"ping": "pong"}

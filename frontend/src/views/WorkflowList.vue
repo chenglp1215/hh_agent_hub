@@ -25,8 +25,8 @@
     <a-table :dataSource="filteredWorkflows" :columns="columns" rowKey="id" :loading="loading" :pagination="{ pageSize: 10 }">
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'flow_type'">
-          <a-tag :color="{ supervisor: 'blue', sequential: 'green', graph: 'purple' }[record.flow_type]">
-            {{ { supervisor: '监督者', sequential: '顺序', graph: '图' }[record.flow_type] }}
+          <a-tag :color="flowTypeColors[record.flow_type] || 'default'">
+            {{ flowTypeLabels[record.flow_type] || record.flow_type }}
           </a-tag>
         </template>
         <template v-if="column.key === 'status'">
@@ -57,6 +57,9 @@ const loading = ref(false)
 const search = ref('')
 const flowType = ref('')
 const status = ref('')
+
+const flowTypeColors: Record<string, string> = { supervisor: 'blue', sequential: 'green', graph: 'purple' }
+const flowTypeLabels: Record<string, string> = { supervisor: '监督者', sequential: '顺序', graph: '图' }
 
 const columns = [
   { title: '名称', dataIndex: 'name', key: 'name' },

@@ -49,7 +49,6 @@ const props = defineProps<{ appId: number; apiKey: string }>()
 const messages = ref<any[]>([])
 const inputText = ref('')
 const streaming = ref(false)
-let abortController: AbortController | null = null
 
 async function handleSend() {
   const text = inputText.value.trim()
@@ -61,7 +60,7 @@ async function handleSend() {
 
   try {
     const { createSSEConnection } = await import('@/utils/sse')
-    abortController = createSSEConnection(
+    createSSEConnection(
       '/api/v1/chat',
       { app_id: props.appId, message: text, stream: true },
       (event, data) => {

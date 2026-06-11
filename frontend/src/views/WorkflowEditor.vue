@@ -33,7 +33,7 @@
           @dragstart="onDragStart($event, agent)"
         >
           <div class="font-medium">{{ agent.display_name || agent.name }}</div>
-          <div class="text-xs text-gray-500">{{ { local: '本地', http: 'HTTP', claudecode: 'CC' }[agent.agent_type] }}</div>
+          <div class="text-xs text-gray-500">{{ agentTypeLabels[agent.agent_type] || agent.agent_type }}</div>
         </div>
       </div>
 
@@ -55,10 +55,10 @@
           <Background />
           <Controls />
 
-          <template #node-start="props">
+          <template #node-start>
             <div class="px-4 py-2 bg-green-600 rounded-full text-white text-xs font-bold">START</div>
           </template>
-          <template #node-end="props">
+          <template #node-end>
             <div class="px-4 py-2 bg-red-600 rounded-full text-white text-xs font-bold">END</div>
           </template>
           <template #node-supervisor="props">
@@ -122,6 +122,8 @@ const workflowName = ref('')
 const flowType = ref('sequential')
 const errorStrategy = ref('fail_fast')
 const agents = ref<any[]>([])
+
+const agentTypeLabels: Record<string, string> = { local: '本地', http: 'HTTP', claudecode: 'CC' }
 
 const nodes = ref<any[]>([
   { id: 'start', type: 'start', position: { x: 400, y: 0 }, data: { label: 'Start' } },

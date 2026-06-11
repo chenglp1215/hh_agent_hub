@@ -18,6 +18,10 @@ from api.v1.skills import router as skills_router
 router.include_router(skills_router)
 
 
+from api.v1.knowledge_bases import router as kb_router
+router.include_router(kb_router)
+
+
 @router.get("/ping")
 async def ping():
     return {"ping": "pong"}

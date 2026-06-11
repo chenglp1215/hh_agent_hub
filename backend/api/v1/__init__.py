@@ -22,6 +22,10 @@ from api.v1.knowledge_bases import router as kb_router
 router.include_router(kb_router)
 
 
+from api.v1.agents import router as agents_router
+router.include_router(agents_router)
+
+
 @router.get("/ping")
 async def ping():
     return {"ping": "pong"}

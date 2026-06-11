@@ -26,6 +26,10 @@ from api.v1.agents import router as agents_router
 router.include_router(agents_router)
 
 
+from api.v1.workflows import router as workflows_router
+router.include_router(workflows_router)
+
+
 @router.get("/ping")
 async def ping():
     return {"ping": "pong"}

@@ -43,7 +43,6 @@ TORTOISE_ORM = {
                 "password": settings.DB_PASSWORD,
                 "database": settings.DB_NAME,
                 "charset": "utf8mb4",
-                "pool": {"minsize": 2, "maxsize": 20},
             },
         }
     },

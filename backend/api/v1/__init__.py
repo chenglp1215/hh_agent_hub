@@ -10,6 +10,10 @@ from api.v1.configs import router as configs_router
 router.include_router(configs_router)
 
 
+from api.v1.mcp_servers import router as mcp_servers_router
+router.include_router(mcp_servers_router)
+
+
 @router.get("/ping")
 async def ping():
     return {"ping": "pong"}

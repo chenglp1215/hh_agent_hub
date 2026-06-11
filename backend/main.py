@@ -70,6 +70,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from api.middleware import ApiKeyMiddleware
+
+app.add_middleware(ApiKeyMiddleware)
+
 from api.v1 import router as v1_router
 
 app.include_router(v1_router)

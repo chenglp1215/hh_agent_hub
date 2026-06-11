@@ -19,5 +19,16 @@ body {
 .ant-layout-sider { background: var(--color-bg) !important; }
 .ant-menu-dark { background: var(--color-bg) !important; }
 .ant-card { background: var(--color-surface) !important; border-color: var(--color-border) !important; }
-.ant-table { background: var(--color-surface) !important; }
+.ant-card-head { background: var(--color-surface) !important; border-color: var(--color-border) !important; }
+.ant-card-head-title { color: #e1e1e1 !important; }
+.ant-card-body { color: #e1e1e1 !important; }
+.ant-table { background: var(--color-surface) !important; color: #e1e1e1 !important; }
+.ant-table-thead > tr > th { background: var(--color-surface) !important; color: #e1e1e1 !important; border-color: var(--color-border) !important; }
+.ant-table-tbody > tr > td { color: #e1e1e1 !important; border-color: var(--color-border) !important; }
 .ant-input, .ant-select-selector, .ant-picker { background: #1a1a1c !important; border-color: var(--color-border) !important; color: #e1e1e1 !important; }
+.ant-input::placeholder, .ant-select-selection-placeholder { color: #8a8f98 !important; }
+.ant-form-item-label > label { color: #e1e1e1 !important; }
+.ant-modal-content { background: var(--color-surface) !important; color: #e1e1e1 !important; }
+.ant-modal-header { background: var(--color-surface) !important; }
+.ant-modal-title { color: #e1e1e1 !important; }
+.ant-tag { border-color: var(--color-border) !important; }

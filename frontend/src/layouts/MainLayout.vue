@@ -1,17 +1,20 @@
 <template>
   <a-layout class="min-h-screen">
-    <a-layout-sider v-model:collapsed="collapsed" collapsible class="!bg-[#010102]">
-      <div class="h-16 flex items-center justify-center text-white font-bold text-lg">
-        <span v-if="!collapsed">Agent Hub</span>
-        <span v-else>AH</span>
-      </div>
-      <a-menu v-model:selectedKeys="selectedKeys" mode="inline" theme="dark" :style="{ background: '#010102' }" @click="handleMenuClick">
-        <a-menu-item key="/dashboard">
-          <DashboardOutlined /><span>主控台</span>
-        </a-menu-item>
-      </a-menu>
-    </a-layout-sider>
+    <AppSidebar />
     <a-layout>
+      <a-layout-header class="!bg-[#0a0a0b] flex items-center justify-between px-6 border-b border-[#1e1e20]">
+        <a-breadcrumb>
+          <a-breadcrumb-item v-for="(item, i) in breadcrumbs" :key="i">
+            {{ item }}
+          </a-breadcrumb-item>
+        </a-breadcrumb>
+        <a-space>
+          <a-tag v-if="userStore.user" color="#5e6ad2">{{ userStore.user.username }}</a-tag>
+          <a-button type="text" @click="userStore.logout">
+            <LogoutOutlined />
+          </a-button>
+        </a-space>
+      </a-layout-header>
       <a-layout-content class="p-6 bg-[#0a0a0b]">
         <router-view />
       </a-layout-content>
@@ -20,18 +23,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { DashboardOutlined } from '@ant-design/icons-vue'
+import { computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { useUserStore } from '@/stores/user'
+import { LogoutOutlined } from '@ant-design/icons-vue'
+import AppSidebar from '@/components/AppSidebar.vue'
 
-const router = useRouter()
 const route = useRoute()
-const collapsed = ref(false)
-const selectedKeys = ref<string[]>([route.path])
+const userStore = useUserStore()
 
-watch(() => route.path, (path) => { selectedKeys.value = [path] })
+const breadcrumbs = computed(() => {
+  return route.matched.filter(r => r.meta?.title).map(r => r.meta.title as string)
+})
 
-function handleMenuClick({ key }: { key: string }) {
-  router.push(key)
-}
+onMounted(async () => {
+  if (!userStore.user) {
+    await userStore.fetchUser()
+  }
+})
 </script>

@@ -57,7 +57,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: >
+    command: |
       python -c "
       import asyncio
       from backend.config import TORTOISE_ORM

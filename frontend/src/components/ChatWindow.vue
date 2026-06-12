@@ -20,6 +20,13 @@
             <div class="text-xs text-gray-400">{{ msg.agent }} 返回:</div>
             <div class="text-xs mt-1 max-h-32 overflow-y-auto">{{ msg.output }}</div>
           </div>
+          <div v-else-if="msg.type === 'tool_call'" class="text-purple-400">
+            <div class="text-xs">&#x1f6e0; {{ msg.tool }}({{ msg.args }})</div>
+          </div>
+          <div v-else-if="msg.type === 'tool_result'" class="text-purple-400">
+            <div class="text-xs text-gray-400">{{ msg.tool }} →</div>
+            <div class="text-xs mt-1 max-h-24 overflow-y-auto">{{ msg.result }}</div>
+          </div>
           <div v-else>{{ msg.content }}</div>
         </div>
       </div>
@@ -84,6 +91,20 @@ async function handleSend() {
             type: 'agent_result',
             agent: data.agent,
             output: data.output,
+          })
+        } else if (event === 'tool_call') {
+          messages.value.push({
+            role: 'assistant',
+            type: 'tool_call',
+            tool: data.tool,
+            args: data.args,
+          })
+        } else if (event === 'tool_result') {
+          messages.value.push({
+            role: 'assistant',
+            type: 'tool_result',
+            tool: data.tool,
+            result: data.result,
           })
         } else if (event === 'text') {
           const last = messages.value[messages.value.length - 1]

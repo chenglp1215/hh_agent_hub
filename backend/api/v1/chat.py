@@ -193,10 +193,41 @@ async def _stream_chat(session: Session, message: str):
 
         # astream with updates mode: yields {node_name: state_update} per node execution
         seen_outputs = set()
+        seen_tool_calls = set()
         async for chunk in graph.astream(initial_state, stream_mode="updates"):
             for node_name, update in chunk.items():
                 intermediate = update.get("intermediate_results") or {}
                 trace = update.get("trace") or []
+                node_messages = update.get("messages") or []
+
+                # Emit tool calls from this node's messages
+                for msg in node_messages:
+                    msg_type = getattr(msg, "type", "")
+                    if msg_type == "ai":
+                        tool_calls = getattr(msg, "tool_calls", []) or []
+                        for tc in tool_calls:
+                            tc_name = tc.get("name", "") if isinstance(tc, dict) else getattr(tc, "name", "")
+                            tc_args = tc.get("args", {}) if isinstance(tc, dict) else getattr(tc, "args", {})
+                            tc_key = f"{node_name}:{tc_name}:{str(tc_args)[:80]}"
+                            if tc_key not in seen_tool_calls:
+                                seen_tool_calls.add(tc_key)
+                                args_str = str(tc_args)[:200] if tc_args else "{}"
+                                yield await sse_event("tool_call", {
+                                    "agent": node_name if node_name != "supervisor" else "supervisor",
+                                    "tool": tc_name,
+                                    "args": args_str,
+                                })
+                    elif msg_type == "tool":
+                        tc_name = getattr(msg, "name", "")
+                        tc_content = str(getattr(msg, "content", ""))[:300]
+                        tc_key = f"result:{node_name}:{tc_name}:{tc_content[:40]}"
+                        if tc_key not in seen_tool_calls:
+                            seen_tool_calls.add(tc_key)
+                            yield await sse_event("tool_result", {
+                                "agent": node_name if node_name != "supervisor" else "supervisor",
+                                "tool": tc_name,
+                                "result": tc_content,
+                            })
 
                 # Emit supervisor routing decisions
                 for t in trace:

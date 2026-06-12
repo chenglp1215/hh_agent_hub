@@ -232,6 +232,10 @@ async def _stream_chat(session: Session, message: str):
             if last_key:
                 final_answer = str(intermediate_results.get(last_key[-1], ""))
 
+        # Send final answer as text event (frontend uses this for display)
+        if final_answer:
+            yield await sse_event("text", {"content": final_answer})
+
         # Update session
         messages = session.messages or []
         messages.append({"role": "assistant", "content": final_answer})

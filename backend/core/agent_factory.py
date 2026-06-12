@@ -1,5 +1,6 @@
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from pydantic import create_model, Field
 from langgraph.prebuilt import create_react_agent
 from langchain_core.tools import BaseTool
 from langchain_core.messages import SystemMessage
@@ -8,6 +9,29 @@ from loguru import logger
 from core.llm_manager import llm_manager
 from core.mcp_client import mcp_client
 from core.knowledge_injector import knowledge_injector
+
+
+def _build_args_schema(input_schema: dict, tool_name: str):
+    """将 MCP JSON Schema 转为 Pydantic 动态模型，用作 BaseTool.args_schema"""
+    properties = input_schema.get("properties", {})
+    if not properties:
+        return None
+    required_fields = input_schema.get("required", [])
+    fields = {}
+    for prop_name, prop_schema in properties.items():
+        prop_type = prop_schema.get("type", "string")
+        desc = prop_schema.get("description", "")
+        is_required = prop_name in required_fields
+        default = ... if is_required else None
+        annotation = {
+            "string": str, "integer": int, "number": float,
+            "boolean": bool, "array": list, "object": dict,
+        }.get(prop_type, str)
+        if not is_required:
+            annotation = Optional[annotation]
+        fields[prop_name] = (annotation, Field(default=default, description=desc))
+    safe_name = "".join(c if c.isalnum() else "_" for c in tool_name)
+    return create_model(f"{safe_name}_args", **fields)
 
 
 class _MCPTool(BaseTool):
@@ -213,9 +237,12 @@ class AgentNodeFactory:
                     t_name = t["name"]
                     if enabled_tools and t_name not in enabled_tools:
                         continue
+                    input_schema = t.get("inputSchema", {})
+                    args_schema = _build_args_schema(input_schema, t_name)
                     tools.append(_MCPTool(
                         name=t_name,
                         description=t.get("description", ""),
+                        args_schema=args_schema,
                         server_id=server_id,
                         mcp_tool_name=t_name,
                     ))

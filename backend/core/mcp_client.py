@@ -124,8 +124,8 @@ class MCPClient:
             logger.error(f"[MCP] tools/call timeout after {self.TOOL_CALL_TIMEOUT}s")
             raise
         data = resp.json()
-        if "error" in data:
-            err = data["error"]
+        err = data.get("error")
+        if err is not None:
             logger.error(f"[MCP] tools/call JSON-RPC error: code={err.get('code')}, message={err.get('message')}")
             raise Exception(f"MCP Error [{err.get('code')}]: {err.get('message')}")
         result = data.get("result")

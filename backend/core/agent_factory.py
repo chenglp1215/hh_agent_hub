@@ -169,20 +169,34 @@ class AgentNodeFactory:
 
     async def _resolve_llm_config(self, agent_config: Dict[str, Any]) -> Dict[str, Any]:
         """解析 LLM 配置：优先使用 llm_config_id 引用的系统配置"""
-        llm_config = agent_config.get("llm_config") or {}
+        llm_config = agent_config.get("llm_config")
         llm_config_id = agent_config.get("llm_config_id")
+
         if llm_config_id:
             from models.llm_config import LlmConfig
             sys_cfg = await LlmConfig.get_or_none(id=llm_config_id)
             if sys_cfg:
-                llm_config = {
+                # 系统配置为基底，agent 内联配置可覆盖 api_key/base_url
+                inline = llm_config or {}
+                return {
                     "provider": sys_cfg.provider,
                     "model": sys_cfg.model,
                     "temperature": sys_cfg.temperature,
                     "max_tokens": sys_cfg.max_tokens,
-                    "api_key": sys_cfg.api_key or llm_config.get("api_key"),
-                    "base_url": sys_cfg.base_url or llm_config.get("base_url"),
+                    "api_key": inline.get("api_key") or sys_cfg.api_key,
+                    "base_url": inline.get("base_url") or sys_cfg.base_url,
                 }
+            else:
+                logger.warning(
+                    f"LLM config id={llm_config_id} not found for agent "
+                    f"'{agent_config.get('name')}', falling back to inline config"
+                )
+
+        if not llm_config:
+            raise ValueError(
+                f"Agent '{agent_config.get('name', 'unknown')}' has no LLM config. "
+                "Please assign an LLM configuration in agent settings."
+            )
         return llm_config
 
     def _load_skills_context(self, skills: List[Dict[str, Any]]) -> str:

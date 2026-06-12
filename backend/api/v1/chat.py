@@ -241,20 +241,6 @@ async def _stream_chat(session: Session, message: str):
 
         await graph_task
 
-            # Accumulate final answer
-            last_chunk = chunk.get(list(chunk.keys())[0], {}) if chunk else {}
-            im = last_chunk.get("intermediate_results") or {}
-            if im:
-                last_key = [k for k in im if not k.startswith("_")]
-                if last_key:
-                    final_answer = str(im.get(last_key[-1], ""))
-
-        # Fallback: get final from accumulated
-        if not final_answer and intermediate_results:
-            last_key = [k for k in intermediate_results if not k.startswith("_")]
-            if last_key:
-                final_answer = str(intermediate_results.get(last_key[-1], ""))
-
         # Send final answer as text event (frontend uses this for display)
         if final_answer:
             yield await sse_event("text", {"content": final_answer})

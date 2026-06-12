@@ -1,6 +1,7 @@
 from typing import Dict, Any, List
 from langgraph.prebuilt import create_react_agent
 from langchain_core.tools import BaseTool
+from langchain_core.messages import SystemMessage
 from loguru import logger
 
 from core.llm_manager import llm_manager
@@ -67,7 +68,7 @@ class AgentNodeFactory:
         react_agent = create_react_agent(
             model=llm,
             tools=tools,
-            prompt=full_prompt,
+            state_modifier=SystemMessage(content=full_prompt),
         )
 
         # 6. 返回节点函数
@@ -82,7 +83,8 @@ class AgentNodeFactory:
                 )
                 # 使用注入后的 prompt 重建 agent
                 injected_agent = create_react_agent(
-                    model=llm, tools=tools, prompt=injected_prompt
+                    model=llm, tools=tools,
+                    state_modifier=SystemMessage(content=injected_prompt),
                 )
                 result = await injected_agent.ainvoke({
                     "messages": [{"role": "user", "content": user_input}],

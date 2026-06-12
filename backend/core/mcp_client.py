@@ -130,14 +130,17 @@ class MCPClient:
             raise Exception(f"MCP Error [{err.get('code')}]: {err.get('message')}")
         result = data.get("result")
         if result is None:
-            logger.warning(f"[MCP] tools/call returned null result: {resp.text[:300]}")
-            return ""  # empty result = no output (not an error)
+            logger.warning(f"[MCP] tools/call returned null result: {resp.text[:500]}")
+            return ""
+        if not isinstance(result, dict):
+            logger.error(f"[MCP] tools/call unexpected result type={type(result).__name__}, raw: {resp.text[:500]}")
+            return ""
         content_parts = []
         for item in (result.get("content") or []):
-            if item is None:
+            if not isinstance(item, dict):
                 continue
             if item.get("type") == "text":
-                content_parts.append(item["text"])
+                content_parts.append(item.get("text", ""))
             elif item.get("type") == "resource":
                 content_parts.append(item.get("text", "") or item.get("uri", ""))
         return "\n".join(content_parts)

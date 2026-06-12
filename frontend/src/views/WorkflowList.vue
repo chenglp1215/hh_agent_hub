@@ -13,7 +13,6 @@
         <a-select-option value="">全部模式</a-select-option>
         <a-select-option value="supervisor">监督者模式</a-select-option>
         <a-select-option value="sequential">顺序模式</a-select-option>
-        <a-select-option value="graph">图模式</a-select-option>
       </a-select>
       <a-select v-model:value="status" class="w-32" @change="fetchList">
         <a-select-option value="">全部状态</a-select-option>
@@ -24,6 +23,9 @@
 
     <a-table :dataSource="filteredWorkflows" :columns="columns" rowKey="id" :loading="loading" :pagination="{ pageSize: 10 }">
       <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'agents'">
+          <span>{{ (record.worker_agent_ids || []).length }}</span>
+        </template>
         <template v-if="column.key === 'flow_type'">
           <a-tag :color="flowTypeColors[record.flow_type] || 'default'">
             {{ flowTypeLabels[record.flow_type] || record.flow_type }}

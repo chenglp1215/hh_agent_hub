@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Any
 class WorkflowCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
-    flow_type: str = Field(..., pattern="^(supervisor|sequential|graph)$")
+    flow_type: str = Field(..., pattern="^(supervisor|sequential)$")
     supervisor_agent_id: Optional[int] = None
     worker_agent_ids: List[int] = []
     edges: List[Dict[str, Any]] = []

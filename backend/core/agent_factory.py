@@ -106,12 +106,13 @@ class AgentNodeFactory:
         # 2. 加载 MCP 工具（连接 MCP Server 并转换为 LangChain BaseTool）
         tools = await self._load_mcp_tools(agent_config.get("mcp_servers", []))
 
-        # 3. 加载 Skill 内容作为 Prompt 上下文
-        skill_context = self._load_skills_context(agent_config.get("skills", []))
+        # 3. 加载 Skill 作为按需工具（而非全量注入 prompt）
+        skill_tools, skill_summary = self._load_skill_tools(agent_config.get("skills", []))
+        tools.extend(skill_tools)
 
-        # 4. 构建完整 System Prompt
+        # 4. 构建完整 System Prompt（skill 摘要 + routing 指令）
         base_prompt = agent_config.get("system_prompt", "")
-        full_prompt = base_prompt + "\n\n" + skill_context if skill_context else base_prompt
+        full_prompt = base_prompt + "\n\n" + skill_summary if skill_summary else base_prompt
 
         # 4a. Supervisor 路由指令注入
         available_workers = agent_config.get("_available_workers", [])
@@ -158,8 +159,8 @@ class AgentNodeFactory:
                 injected_prompt = await knowledge_injector.inject(
                     kb_ids, user_input, base_prompt
                 )
-                if skill_context:
-                    injected_prompt += "\n\n" + skill_context
+                if skill_summary:
+                    injected_prompt += "\n\n" + skill_summary
                 if routing_instruction:
                     injected_prompt += routing_instruction
                 # 使用注入后的 prompt 重建 agent
@@ -290,22 +291,20 @@ class AgentNodeFactory:
             )
         return llm_config
 
-    def _load_skills_context(self, skills: List[Dict[str, Any]]) -> str:
-        """将 Skills 转换为 Prompt 上下文文本
+    def _load_skill_tools(self, skills: List[Dict[str, Any]]) -> tuple:
+        """将 Skills 封装为 LangChain BaseTool 列表 + 摘要文本
 
-        支持两种 Skill 类型：
-        - prompt: 直接嵌入 prompt_template 内容
-        - file: 引用文件路径
-
-        Args:
-            skills: Skill 配置列表
+        每种 Skill 生成一个工具，Agent 按需调用加载，避免全量注入 prompt。
+        同时返回 skill 摘要，简要列出可用 skill 名称和用途。
 
         Returns:
-            拼接后的上下文文本，空列表时返回空字符串
+            (tools_list, summary_text)
         """
         if not skills:
-            return ""
-        parts = []
+            return [], ""
+
+        tools = []
+        summaries = []
         for skill in skills:
             name = skill.get("name", "")
             skill_type = skill.get("skill_type", "prompt")
@@ -313,14 +312,62 @@ class AgentNodeFactory:
 
             if skill_type == "prompt" and isinstance(content, dict):
                 template = content.get("prompt_template", "")
+                desc = content.get("description", name)
+                summaries.append(f"- {name}: {desc[:80]}")
                 if template:
-                    parts.append(f"## Skill: {name}\n{template}")
+                    tools.append(_SkillTool(
+                        name=f"skill_{name}",
+                        description=f"加载技能「{name}」的详细指导。{desc[:100]}。当需要{name}相关的专业知识时调用此工具。",
+                        skill_name=name,
+                        skill_content=template,
+                    ))
             elif skill_type == "file" and isinstance(content, dict):
                 file_path = content.get("file_path", "")
+                summaries.append(f"- {name}: 引用文件 {file_path}")
                 if file_path:
-                    parts.append(f"[引用文件: {file_path}]")
+                    tools.append(_SkillTool(
+                        name=f"skill_{name}",
+                        description=f"加载技能「{name}」中的文件内容。引用文件: {file_path}",
+                        skill_name=name,
+                        skill_content=f"[引用文件: {file_path}]",
+                    ))
 
-        return "\n\n".join(parts)
+        summary = ""
+        if summaries:
+            summary = "可用技能（按需调用对应 skill_ 工具加载详情）:\n" + "\n".join(summaries)
+
+        return tools, summary
+
+
+class _SkillTool(BaseTool):
+    """将 Skill 封装为 LangChain 按需加载工具"""
+
+    skill_name: str
+    skill_content: str
+
+    async def _arun(self, **kwargs) -> str:
+        logger.info(f"[Skill] 加载技能: {self.skill_name}")
+        return self.skill_content
+
+    def _run(self, **kwargs) -> str:
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                future = concurrent.futures.Future()
+                async def _call():
+                    try:
+                        result = await self._arun(**kwargs)
+                        future.set_result(result)
+                    except Exception as e:
+                        future.set_exception(e)
+                loop.create_task(_call())
+                return future.result(timeout=120)
+            else:
+                return loop.run_until_complete(self._arun(**kwargs))
+        except RuntimeError:
+            return asyncio.run(self._arun(**kwargs))
 
     async def create_http_agent(self, agent_config: Dict[str, Any]):
         """创建 http 类型 Agent 的执行节点

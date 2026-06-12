@@ -153,8 +153,9 @@ async def _execute_chat(session: Session, message: str) -> dict:
                 last_key = list(intermediate.keys())[-1]
                 final_answer = intermediate.get(last_key, "")
 
-        messages.append({"role": "assistant", "content": final_answer})
-        session.messages = messages
+        msg_list = initial_state.get("messages") or []
+        msg_list.append({"role": "assistant", "content": final_answer})
+        session.messages = msg_list
         session.updated_at = datetime.now()
         await session.save()
 

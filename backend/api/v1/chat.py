@@ -55,6 +55,7 @@ async def chat(req: ChatRequest, request: Request):
         "message": result.get("final_answer", ""),
         "intermediate_results": result.get("intermediate_results", {}),
         "duration_ms": result.get("duration_ms", 0),
+        "trace": result.get("trace", []),
     })
 
 
@@ -166,6 +167,7 @@ async def _execute_chat(session: Session, message: str) -> dict:
             "need_human": False,
             "human_input": "",
             "error": None,
+            "trace": [],
         }
 
         logger.info(f"开始执行工作流: flow_type={workflow.flow_type}, workers={agent_names}")
@@ -188,6 +190,7 @@ async def _execute_chat(session: Session, message: str) -> dict:
             "final_answer": final_answer,
             "intermediate_results": result.get("intermediate_results", {}),
             "duration_ms": duration_ms,
+            "trace": result.get("trace", []),
         }
     except Exception as e:
         logger.error(f"Chat execution failed: {e}")

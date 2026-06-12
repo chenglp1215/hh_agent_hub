@@ -13,6 +13,7 @@ class AgentState(TypedDict):
     final_answer: str
     need_human: bool
     human_input: str
+    trace: List[Dict[str, Any]]
     error: Optional[str]
 
 
@@ -74,17 +75,22 @@ class WorkflowEngine:
         MAX_SUPERVISOR_ROUNDS = 5
 
         async def supervisor_wrapper(state: AgentState) -> dict:
+            trace = state.get("trace") or []
             intermediate = state.get("intermediate_results") or {}
             rounds = intermediate.get("_supervisor_rounds", 0)
+
             if rounds >= MAX_SUPERVISOR_ROUNDS:
                 logger.warning(
                     f"[Supervisor: {supervisor_name}] 已达最大轮次 {MAX_SUPERVISOR_ROUNDS}，强制结束"
                 )
                 intermediate["_supervisor_rounds"] = rounds + 1
-                return {"next_agent": "end", "intermediate_results": intermediate}
+                trace.append({"type": "supervisor_force_end", "round": rounds + 1})
+                return {"next_agent": "end", "intermediate_results": intermediate, "trace": trace}
 
             logger.info(f"[Supervisor: {supervisor_name}] 第 {rounds + 1} 轮调度决策")
+            trace.append({"type": "supervisor_start", "round": rounds + 1})
             result = await supervisor_node(state)
+            trace = result.get("trace") or trace
             intermediate = result.get("intermediate_results") or {}
             intermediate["_supervisor_rounds"] = rounds + 1
             output = intermediate.get(supervisor_name, "")
@@ -93,6 +99,7 @@ class WorkflowEngine:
             if match:
                 raw = match.group(1).strip()
                 result["next_agent"] = "end" if raw.lower() == "end" else raw
+                trace.append({"type": "supervisor_route", "round": rounds + 1, "target": result["next_agent"]})
                 logger.info(f"[Supervisor: {supervisor_name}] 路由决策: {result['next_agent']}")
                 cleaned = re.sub(
                     r'^NEXT_AGENT:\s*.+$\n?', '', output, flags=re.MULTILINE
@@ -101,8 +108,10 @@ class WorkflowEngine:
                     intermediate[supervisor_name] = cleaned
             else:
                 result["next_agent"] = "end"
+                trace.append({"type": "supervisor_end", "round": rounds + 1, "reason": "no NEXT_AGENT marker"})
                 logger.warning(f"[Supervisor: {supervisor_name}] 未找到 NEXT_AGENT 标记，结束工作流")
             result["intermediate_results"] = intermediate
+            result["trace"] = trace
             return result
 
         graph.add_node("supervisor", supervisor_wrapper)

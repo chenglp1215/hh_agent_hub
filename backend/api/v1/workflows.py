@@ -89,7 +89,8 @@ async def create_workflow(body: WorkflowCreate, user=Depends(get_current_user)):
 
 @router.put("/{workflow_id}")
 async def update_workflow(workflow_id: int, body: WorkflowUpdate, user=Depends(get_current_user)):
-    print(f"[DEBUG PUT] raw body: worker_agent_ids={body.worker_agent_ids} supervisor_agent_id={body.supervisor_agent_id} flow_type={body.flow_type}")
+    with open("/tmp/debug_put.log", "a") as f:
+        f.write(f"PUT body: wids={body.worker_agent_ids} sid={body.supervisor_agent_id} ft={body.flow_type}\n")
     w = await Workflow.get_or_none(id=workflow_id)
     if not w:
         return error(code=404, message="工作流不存在")
@@ -111,18 +112,20 @@ async def update_workflow(workflow_id: int, body: WorkflowUpdate, user=Depends(g
     # worker_agent_ids explicitly — Tortoise JSONField needs explicit assignment
     if body.worker_agent_ids is not None:
         w.worker_agent_ids = list(body.worker_agent_ids)
-        print(f"[DEBUG] Workflow update: worker_agent_ids = {body.worker_agent_ids} type={type(body.worker_agent_ids)}")
-        logger.info(f"Workflow update: worker_agent_ids = {body.worker_agent_ids}")
+        with open("/tmp/debug_put.log", "a") as f:
+            f.write(f"SET wids={w.worker_agent_ids}\n")
+    else:
+        with open("/tmp/debug_put.log", "a") as f:
+            f.write("wids IS NONE\n")
 
     if body.status is not None:
         w.status = body.status
 
     w.version += 1
     await w.save()
-    # Re-fetch to verify persistence
     await w.refresh_from_db(fields=["worker_agent_ids"])
-    print(f"[DEBUG] Workflow saved, verified: worker_agent_ids = {w.worker_agent_ids}")
-    logger.info(f"Workflow saved, verified: worker_agent_ids = {w.worker_agent_ids}")
+    with open("/tmp/debug_put.log", "a") as f:
+        f.write(f"SAVED wids={w.worker_agent_ids}\n")
     return success(message="更新成功")
 
 

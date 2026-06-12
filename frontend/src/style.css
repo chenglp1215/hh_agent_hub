@@ -23,6 +23,9 @@ body {
 .ant-card-head { background: var(--color-surface) !important; border-color: var(--color-border) !important; }
 .ant-card-head-title { color: #e1e1e1 !important; }
 .ant-card-body { color: #e1e1e1 !important; }
+.ant-card-actions { background: #0a0a0b !important; border-color: var(--color-border) !important; }
+.ant-card-actions > li { border-color: var(--color-border) !important; }
+.ant-card-actions > li > span { color: #e1e1e1 !important; }
 .ant-table { background: var(--color-surface) !important; color: #e1e1e1 !important; }
 .ant-table-thead > tr > th { background: var(--color-surface) !important; color: #e1e1e1 !important; border-color: var(--color-border) !important; }
 .ant-table-tbody > tr > td { color: #e1e1e1 !important; border-color: var(--color-border) !important; }

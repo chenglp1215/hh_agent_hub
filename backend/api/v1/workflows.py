@@ -90,8 +90,10 @@ async def create_workflow(body: WorkflowCreate, user=Depends(get_current_user)):
 @router.put("/{workflow_id}")
 async def update_workflow(workflow_id: int, body: WorkflowUpdate, user=Depends(get_current_user)):
     with open("/tmp/debug_put.log", "a") as f:
-        f.write(f"PUT body: wids={body.worker_agent_ids} sid={body.supervisor_agent_id} ft={body.flow_type}\n")
+        f.write(f"1.ENTER wids={body.worker_agent_ids} sid={body.supervisor_agent_id}\n")
     w = await Workflow.get_or_none(id=workflow_id)
+    with open("/tmp/debug_put.log", "a") as f:
+        f.write(f"2.GOT_WORKFLOW w={w.id if w else None} status={w.status if w else None}\n")
     if not w:
         return error(code=404, message="工作流不存在")
 

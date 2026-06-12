@@ -71,6 +71,37 @@ class _MCPTool(BaseTool):
             return asyncio.run(self._arun(**kwargs))
 
 
+class _SkillTool(BaseTool):
+    """将 Skill 封装为 LangChain 按需加载工具"""
+
+    skill_name: str
+    skill_content: str
+
+    async def _arun(self, **kwargs) -> str:
+        logger.info(f"[Skill] 加载技能: {self.skill_name}")
+        return self.skill_content
+
+    def _run(self, **kwargs) -> str:
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                future = concurrent.futures.Future()
+                async def _call():
+                    try:
+                        result = await self._arun(**kwargs)
+                        future.set_result(result)
+                    except Exception as e:
+                        future.set_exception(e)
+                loop.create_task(_call())
+                return future.result(timeout=120)
+            else:
+                return loop.run_until_complete(self._arun(**kwargs))
+        except RuntimeError:
+            return asyncio.run(self._arun(**kwargs))
+
+
 class AgentNodeFactory:
     """根据 Agent 配置创建 LangGraph Agent 节点
 
@@ -338,36 +369,6 @@ class AgentNodeFactory:
 
         return tools, summary
 
-
-class _SkillTool(BaseTool):
-    """将 Skill 封装为 LangChain 按需加载工具"""
-
-    skill_name: str
-    skill_content: str
-
-    async def _arun(self, **kwargs) -> str:
-        logger.info(f"[Skill] 加载技能: {self.skill_name}")
-        return self.skill_content
-
-    def _run(self, **kwargs) -> str:
-        import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                import concurrent.futures
-                future = concurrent.futures.Future()
-                async def _call():
-                    try:
-                        result = await self._arun(**kwargs)
-                        future.set_result(result)
-                    except Exception as e:
-                        future.set_exception(e)
-                loop.create_task(_call())
-                return future.result(timeout=120)
-            else:
-                return loop.run_until_complete(self._arun(**kwargs))
-        except RuntimeError:
-            return asyncio.run(self._arun(**kwargs))
 
     async def create_http_agent(self, agent_config: Dict[str, Any]):
         """创建 http 类型 Agent 的执行节点

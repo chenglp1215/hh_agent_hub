@@ -59,118 +59,91 @@ async def chat(req: ChatRequest, request: Request):
     })
 
 
+async def _build_agent_graph(session, message: str):
+    """构建工作流图和初始状态（_execute_chat 和 _stream_chat 共用）"""
+    messages = session.messages or []
+    messages.append({"role": "user", "content": message})
+
+    workflow = await Workflow.get_or_none(id=session.app.workflow_id)
+    if not workflow:
+        return None, None, None
+
+    from core.workflow_engine import workflow_engine, AgentState
+    from core.agent_factory import agent_factory
+    from models.agent import Agent
+    from models.mcp_server import AgentMcpLink
+    from models.skill import AgentSkillLink
+
+    worker_ids = workflow.worker_agent_ids or []
+    agent_nodes = {}
+    agent_names = []
+    for wid in worker_ids:
+        agent = await Agent.get_or_none(id=wid)
+        if agent:
+            mcp_links = await AgentMcpLink.filter(agent_id=agent.id).prefetch_related("mcp_server")
+            skill_links = await AgentSkillLink.filter(agent_id=agent.id).prefetch_related("skill")
+            config = {
+                "name": agent.name, "agent_type": agent.agent_type, "role": agent.role,
+                "llm_config": agent.llm_config, "llm_config_id": agent.llm_config_id,
+                "http_config": agent.http_config, "claudecode_config": agent.claudecode_config,
+                "system_prompt": agent.system_prompt,
+                "knowledge_base_ids": agent.knowledge_base_ids or [],
+                "mcp_servers": [{
+                    "id": ml.mcp_server.id, "name": ml.mcp_server.name,
+                    "base_url": ml.mcp_server.base_url, "headers": ml.mcp_server.headers,
+                    "single_endpoint": ml.mcp_server.single_endpoint,
+                    "enabled_tools": ml.enabled_tools, "enabled": ml.enabled,
+                } for ml in mcp_links],
+                "skills": [{"name": sl.skill.name, "skill_type": sl.skill.skill_type, "content": sl.skill.content} for sl in skill_links],
+            }
+            node_fn = await agent_factory.create(config)
+            agent_nodes[agent.name] = node_fn
+            agent_names.append(agent.name)
+
+    wf_config = {"flow_type": workflow.flow_type, "worker_agent_ids": agent_names}
+
+    if workflow.flow_type == "supervisor" and workflow.supervisor_agent_id:
+        sup_agent = await Agent.get_or_none(id=workflow.supervisor_agent_id)
+        if sup_agent:
+            mcp_links = await AgentMcpLink.filter(agent_id=sup_agent.id).prefetch_related("mcp_server")
+            skill_links = await AgentSkillLink.filter(agent_id=sup_agent.id).prefetch_related("skill")
+            wf_config["supervisor_agent_name"] = sup_agent.name
+            sup_config = {
+                "name": sup_agent.name, "agent_type": sup_agent.agent_type, "role": sup_agent.role,
+                "llm_config": sup_agent.llm_config, "llm_config_id": sup_agent.llm_config_id,
+                "system_prompt": sup_agent.system_prompt,
+                "knowledge_base_ids": sup_agent.knowledge_base_ids or [],
+                "mcp_servers": [{
+                    "id": ml.mcp_server.id, "name": ml.mcp_server.name,
+                    "base_url": ml.mcp_server.base_url, "headers": ml.mcp_server.headers,
+                    "single_endpoint": ml.mcp_server.single_endpoint,
+                    "enabled_tools": ml.enabled_tools, "enabled": ml.enabled,
+                } for ml in mcp_links],
+                "skills": [{"name": sl.skill.name, "skill_type": sl.skill.skill_type, "content": sl.skill.content} for sl in skill_links],
+                "_available_workers": agent_names,
+            }
+            sup_node_fn = await agent_factory.create(sup_config)
+            agent_nodes[sup_agent.name] = sup_node_fn
+
+    graph = await workflow_engine.build_workflow(wf_config, agent_nodes)
+    initial_state: AgentState = {
+        "user_input": message, "messages": messages,
+        "current_agent": "", "next_agent": "",
+        "intermediate_results": {}, "final_answer": "",
+        "need_human": False, "human_input": "", "error": None, "trace": [],
+    }
+    return graph, initial_state, agent_names, workflow.flow_type
+
+
 async def _execute_chat(session: Session, message: str) -> dict:
-    """执行工作流处理聊天消息（非流式内部方法）
-
-    根据 session 关联的 app 找到对应工作流，构建代理节点并执行。
-
-    Args:
-        session: 当前会话对象，通过 session.app 关联到应用和工作流
-        message: 用户输入的聊天消息
-
-    Returns:
-        包含 final_answer, intermediate_results, duration_ms 的字典
-    """
     import time
     start = time.time()
-
     try:
-        messages = session.messages or []
-        messages.append({"role": "user", "content": message})
-
-        workflow = await Workflow.get_or_none(id=session.app.workflow_id)
-        if not workflow:
+        graph, initial_state, agent_names, flow_type = await _build_agent_graph(session, message)
+        if graph is None:
             return {"final_answer": "工作流未配置", "intermediate_results": {}, "duration_ms": 0}
 
-        from core.workflow_engine import workflow_engine, AgentState
-        from core.agent_factory import agent_factory
-        from models.agent import Agent
-        from models.mcp_server import AgentMcpLink
-        from models.skill import AgentSkillLink
-
-        # 构建 Agent 节点
-        worker_ids = workflow.worker_agent_ids or []
-        agent_nodes = {}
-        agent_names = []
-        for wid in worker_ids:
-            agent = await Agent.get_or_none(id=wid)
-            if agent:
-                mcp_links = await AgentMcpLink.filter(agent_id=agent.id).prefetch_related("mcp_server")
-                skill_links = await AgentSkillLink.filter(agent_id=agent.id).prefetch_related("skill")
-                config = {
-                    "name": agent.name,
-                    "agent_type": agent.agent_type,
-                    "role": agent.role,
-                    "llm_config": agent.llm_config,
-                    "llm_config_id": agent.llm_config_id,
-                    "http_config": agent.http_config,
-                    "claudecode_config": agent.claudecode_config,
-                    "system_prompt": agent.system_prompt,
-                    "knowledge_base_ids": agent.knowledge_base_ids or [],
-                    "mcp_servers": [{
-                        "id": ml.mcp_server.id, "name": ml.mcp_server.name,
-                        "base_url": ml.mcp_server.base_url,
-                        "headers": ml.mcp_server.headers,
-                        "single_endpoint": ml.mcp_server.single_endpoint,
-                        "enabled_tools": ml.enabled_tools,
-                        "enabled": ml.enabled,
-                    } for ml in mcp_links],
-                    "skills": [{"name": sl.skill.name, "skill_type": sl.skill.skill_type, "content": sl.skill.content} for sl in skill_links],
-                }
-                node_fn = await agent_factory.create(config)
-                agent_nodes[agent.name] = node_fn
-                agent_names.append(agent.name)
-
-        # 构建工作流配置
-        wf_config = {
-            "flow_type": workflow.flow_type,
-            "worker_agent_ids": agent_names,
-        }
-
-        if workflow.flow_type == "supervisor" and workflow.supervisor_agent_id:
-            sup_agent = await Agent.get_or_none(id=workflow.supervisor_agent_id)
-            if sup_agent:
-                mcp_links = await AgentMcpLink.filter(agent_id=sup_agent.id).prefetch_related("mcp_server")
-                skill_links = await AgentSkillLink.filter(agent_id=sup_agent.id).prefetch_related("skill")
-                wf_config["supervisor_agent_name"] = sup_agent.name
-                sup_config = {
-                    "name": sup_agent.name,
-                    "agent_type": sup_agent.agent_type,
-                    "role": sup_agent.role,
-                    "llm_config": sup_agent.llm_config,
-                    "llm_config_id": sup_agent.llm_config_id,
-                    "system_prompt": sup_agent.system_prompt,
-                    "knowledge_base_ids": sup_agent.knowledge_base_ids or [],
-                    "mcp_servers": [{
-                        "id": ml.mcp_server.id, "name": ml.mcp_server.name,
-                        "base_url": ml.mcp_server.base_url,
-                        "headers": ml.mcp_server.headers,
-                        "single_endpoint": ml.mcp_server.single_endpoint,
-                        "enabled_tools": ml.enabled_tools,
-                        "enabled": ml.enabled,
-                    } for ml in mcp_links],
-                    "skills": [{"name": sl.skill.name, "skill_type": sl.skill.skill_type, "content": sl.skill.content} for sl in skill_links],
-                    "_available_workers": agent_names,
-                }
-                sup_node_fn = await agent_factory.create(sup_config)
-                agent_nodes[sup_agent.name] = sup_node_fn
-
-        graph = await workflow_engine.build_workflow(wf_config, agent_nodes)
-
-        initial_state: AgentState = {
-            "user_input": message,
-            "messages": messages,
-            "current_agent": "",
-            "next_agent": "",
-            "intermediate_results": {},
-            "final_answer": "",
-            "need_human": False,
-            "human_input": "",
-            "error": None,
-            "trace": [],
-        }
-
-        logger.info(f"开始执行工作流: flow_type={workflow.flow_type}, workers={agent_names}")
+        logger.info(f"开始执行工作流: flow_type={flow_type}, workers={agent_names}")
         result = await graph.ainvoke(initial_state)
         logger.info(f"工作流执行完成")
         final_answer = result.get("final_answer", "")
@@ -202,37 +175,81 @@ async def _execute_chat(session: Session, message: str) -> dict:
 
 
 async def _stream_chat(session: Session, message: str):
-    """SSE 流式聊天执行
+    import time
+    start = time.time()
 
-    先发送 thinking 事件，然后执行工作流，逐步推送中间结果和最终答案。
-
-    Args:
-        session: 当前会话对象
-        message: 用户输入的聊天消息
-
-    Yields:
-        SSE 格式化的事件字符串
-    """
     yield await sse_event("thinking", {"content": "正在分析问题..."})
 
     try:
-        result = await _execute_chat(session, message)
+        graph, initial_state, agent_names, flow_type = await _build_agent_graph(session, message)
+        if graph is None:
+            yield await sse_event("error", {"message": "工作流未配置"})
+            return
 
-        intermediate = result.get("intermediate_results", {})
-        for agent_name, output in intermediate.items():
-            yield await sse_event("agent_call", {"agent": agent_name, "input": message})
-            yield await sse_event("agent_result", {"agent": agent_name, "output": str(output)})
+        logger.info(f"开始执行工作流(stream): flow_type={flow_type}, workers={agent_names}")
+        final_answer = ""
+        intermediate_results = {}
 
-        final = result.get("final_answer", "")
-        words = final.split()
-        buffer = ""
-        for word in words:
-            buffer += word + " "
-            yield await sse_event("text", {"content": buffer})
+        # astream with updates mode: yields {node_name: state_update} per node execution
+        async for chunk in graph.astream(initial_state, stream_mode="updates"):
+            for node_name, update in chunk.items():
+                if node_name == "supervisor":
+                    # Supervisor wrapper output — route decision already made
+                    intermediate = update.get("intermediate_results") or {}
+                    for agent_name, output in intermediate.items():
+                        if agent_name.startswith("_"):
+                            continue
+                        if agent_name not in intermediate_results or intermediate_results.get(agent_name) != output:
+                            intermediate_results[agent_name] = output
+                            yield await sse_event("agent_call", {"agent": agent_name})
+                            yield await sse_event("agent_result", {"agent": agent_name, "output": str(output)[:300]})
+                else:
+                    # Worker agent output
+                    intermediate = update.get("intermediate_results") or {}
+                    for agent_name, output in intermediate.items():
+                        if agent_name.startswith("_"):
+                            continue
+                        if agent_name not in intermediate_results:
+                            yield await sse_event("agent_call", {"agent": agent_name, "input": message[:200]})
+                        intermediate_results[agent_name] = output
+                        yield await sse_event("agent_result", {"agent": agent_name, "output": str(output)[:500]})
+
+                # Also emit trace events
+                trace = update.get("trace") or []
+                for t in trace:
+                    if t.get("type") == "agent_start":
+                        pass  # handled above
+                    elif t.get("type") == "agent_end":
+                        pass
+                    elif t.get("type") == "supervisor_route":
+                        yield await sse_event("agent_call", {
+                            "agent": f"路由: {t.get('target', '?')}",
+                            "input": message[:100],
+                        })
+
+            # Accumulate final answer from last result
+            current = chunk.get(list(chunk.keys())[0], {}) if chunk else {}
+            im = current.get("intermediate_results") or {}
+            if im:
+                last_key = [k for k in im if not k.startswith("_")]
+                if last_key:
+                    final_answer = str(im.get(last_key[-1], ""))
+
+        # Fallback: get final from accumulated
+        if not final_answer and intermediate_results:
+            last_key = [k for k in intermediate_results if not k.startswith("_")]
+            if last_key:
+                final_answer = str(intermediate_results.get(last_key[-1], ""))
+
+        # Update session
+        messages = session.messages or []
+        messages.append({"role": "assistant", "content": final_answer})
+        session.messages = messages
+        await session.save()
 
         yield await sse_event("done", {
             "session_id": session.id,
-            "duration_ms": result.get("duration_ms", 0),
+            "duration_ms": int((time.time() - start) * 1000),
         })
     except Exception as e:
         logger.error(f"Stream chat failed: {e}")

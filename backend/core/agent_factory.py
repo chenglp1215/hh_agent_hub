@@ -449,22 +449,11 @@ class AgentNodeFactory:
 
         return agent_node
 
-    async def create(self, agent_config: Dict[str, Any]):
-        """根据 agent_type 创建对应的 Agent 节点
-
-        Args:
-            agent_config: Agent 配置字典，必须包含 agent_type 字段
-
-        Returns:
-            异步节点函数
-
-        Raises:
-            ValueError: 不支持的 agent_type
-        """
+    async def create(self, agent_config: Dict[str, Any], event_queue=None):
         agent_type = agent_config.get("agent_type", "local")
 
         if agent_type == "local":
-            return await self.create_local_agent(agent_config)
+            return await self.create_local_agent(agent_config, event_queue=event_queue)
         elif agent_type == "http":
             return await self.create_http_agent(agent_config)
         elif agent_type == "claudecode":

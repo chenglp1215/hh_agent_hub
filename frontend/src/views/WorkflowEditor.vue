@@ -198,10 +198,10 @@ const availableAgentOptions = computed(() =>
   agents.value.map(a => ({ value: a.id, label: `${a.display_name || a.name} (${a.role})` }))
 )
 const supervisorOptions = computed(() =>
-  agents.value.filter(a => a.role === 'supervisor').map(a => ({ value: a.id, label: a.display_name || a.name }))
+  agents.value.filter(a => a.role === 'supervisor').map(a => ({ value: Number(a.id), label: a.display_name || a.name }))
 )
 const workerOptions = computed(() =>
-  agents.value.filter(a => a.role === 'worker').map(a => ({ value: a.id, label: a.display_name || a.name }))
+  agents.value.filter(a => a.role === 'worker').map(a => ({ value: Number(a.id), label: a.display_name || a.name }))
 )
 
 function agentTypeLabel(type: string) {
@@ -307,8 +307,11 @@ async function handleSave() {
       data.worker_agent_ids = orderedAgents.value.map(a => a.id)
     } else {
       data.supervisor_agent_id = supervisorAgentId.value
-      data.worker_agent_ids = workerIds.value
+      data.worker_agent_ids = [...workerIds.value]
+      console.log('[WorkflowEditor] save worker_agent_ids:', data.worker_agent_ids, 'raw:', workerIds.value)
     }
+
+    console.log('[WorkflowEditor] saving data:', JSON.stringify(data))
 
     if (isEdit.value) {
       await workflowsApi.update(Number(route.params.id), data)
@@ -352,7 +355,8 @@ onMounted(async () => {
 
       if (w.flow_type === 'supervisor') {
         supervisorAgentId.value = w.supervisor_agent_id
-        workerIds.value = w.worker_agent_ids || []
+        workerIds.value = (w.worker_agent_ids || []).map(Number)
+        console.log('[WorkflowEditor] loaded supervisor:', supervisorAgentId.value, 'workers:', workerIds.value)
       } else {
         // 顺序模式：按 worker_agent_ids 顺序重建列表
         const ids = w.worker_agent_ids || []

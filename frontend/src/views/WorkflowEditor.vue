@@ -77,7 +77,7 @@
             <a-select
               v-model:value="supervisorAgentId"
               placeholder="选择监督者 Agent..."
-              :options="availableAgentOptions"
+              :options="supervisorOptions"
               show-search
               filter-option
               allow-clear
@@ -92,13 +92,14 @@
         <a-card title="工作者 Agent" class="lg:col-span-2">
           <a-form-item label="选择工作者">
             <a-select
-              v-model:value="workerIds"
+              :value="workerIds"
               mode="multiple"
               placeholder="选择多个工作者 Agent..."
-              :options="availableAgentOptions"
+              :options="workerOptions"
               show-search
               filter-option
               class="w-full"
+              @update:value="(vals: number[]) => workerIds = vals"
             />
           </a-form-item>
           <div v-if="workerIds.length > 0" class="mt-4">
@@ -195,7 +196,13 @@ const workflowTimeout = ref(300)
 // --- Agent 列表 ---
 const agents = ref<any[]>([])
 const availableAgentOptions = computed(() =>
-  agents.value.map(a => ({ value: a.id, label: a.display_name || a.name }))
+  agents.value.map(a => ({ value: a.id, label: `${a.display_name || a.name} (${a.role})` }))
+)
+const supervisorOptions = computed(() =>
+  agents.value.filter(a => a.role === 'supervisor').map(a => ({ value: a.id, label: a.display_name || a.name }))
+)
+const workerOptions = computed(() =>
+  agents.value.filter(a => a.role === 'worker').map(a => ({ value: a.id, label: a.display_name || a.name }))
 )
 
 function agentTypeLabel(type: string) {

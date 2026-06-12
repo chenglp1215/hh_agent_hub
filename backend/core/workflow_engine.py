@@ -1,3 +1,4 @@
+import re
 from typing import TypedDict, List, Any, Dict, Optional
 from langgraph.graph import StateGraph, END
 from loguru import logger
@@ -69,8 +70,26 @@ class WorkflowEngine:
 
         graph = StateGraph(AgentState)
 
-        # Add supervisor node
-        graph.add_node("supervisor", supervisor_node)
+        # Add supervisor node (wrapped to parse routing decision)
+        async def supervisor_wrapper(state: AgentState) -> dict:
+            result = await supervisor_node(state)
+            intermediate = result.get("intermediate_results") or {}
+            output = intermediate.get(supervisor_name, "")
+
+            match = re.search(r'^NEXT_AGENT:\s*(.+)$', output, re.MULTILINE)
+            if match:
+                raw = match.group(1).strip()
+                result["next_agent"] = "end" if raw.lower() == "end" else raw
+                cleaned = re.sub(
+                    r'^NEXT_AGENT:\s*.+$\n?', '', output, flags=re.MULTILINE
+                ).strip()
+                if cleaned:
+                    intermediate[supervisor_name] = cleaned
+            else:
+                result["next_agent"] = "end"
+            return result
+
+        graph.add_node("supervisor", supervisor_wrapper)
 
         # Add worker nodes and connect them back to supervisor
         worker_names = []

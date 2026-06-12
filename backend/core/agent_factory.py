@@ -64,6 +64,23 @@ class AgentNodeFactory:
         base_prompt = agent_config.get("system_prompt", "")
         full_prompt = base_prompt + "\n\n" + skill_context if skill_context else base_prompt
 
+        # 4a. Supervisor 路由指令注入
+        available_workers = agent_config.get("_available_workers", [])
+        routing_instruction = ""
+        if available_workers:
+            worker_list = "\n".join(f"- {name}" for name in available_workers)
+            routing_instruction = (
+                f"\n\n---\n"
+                f"你是工作流调度主管，负责将用户问题分派给合适的子代理。\n"
+                f"可用的子代理：\n{worker_list}\n\n"
+                f"请根据用户问题选择一个最合适的子代理来处理。\n"
+                f"在回复的最后，单独用一行标明你选择的代理名称，格式如下：\n"
+                f"NEXT_AGENT: <代理名称>\n\n"
+                f"如果你认为无需再调用任何子代理，请输出：\n"
+                f"NEXT_AGENT: end"
+            )
+            full_prompt += routing_instruction
+
         # 5. 创建 ReAct Agent
         react_agent = create_react_agent(
             model=llm,
@@ -79,8 +96,12 @@ class AgentNodeFactory:
             kb_ids = agent_config.get("knowledge_base_ids", [])
             if kb_ids and user_input:
                 injected_prompt = await knowledge_injector.inject(
-                    kb_ids, user_input, agent_config.get("system_prompt", "")
+                    kb_ids, user_input, base_prompt
                 )
+                if skill_context:
+                    injected_prompt += "\n\n" + skill_context
+                if routing_instruction:
+                    injected_prompt += routing_instruction
                 # 使用注入后的 prompt 重建 agent
                 injected_agent = create_react_agent(
                     model=llm, tools=tools,

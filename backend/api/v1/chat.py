@@ -149,6 +149,7 @@ async def _execute_chat(session: Session, message: str) -> dict:
                         "enabled": ml.enabled,
                     } for ml in mcp_links],
                     "skills": [{"name": sl.skill.name, "skill_type": sl.skill.skill_type, "content": sl.skill.content} for sl in skill_links],
+                    "_available_workers": agent_names,
                 }
                 sup_node_fn = await agent_factory.create(sup_config)
                 agent_nodes[sup_agent.name] = sup_node_fn

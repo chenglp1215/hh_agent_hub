@@ -8,7 +8,7 @@
               ? 'bg-[#5e6ad2] ml-auto'
               : 'bg-[#1a1a1c] mr-auto'
           "
-          class="inline-block max-w-[80%] px-4 py-2 rounded-lg text-sm"
+          class="inline-block max-w-[80%] px-4 py-2 rounded-lg text-sm text-[#f7f8f8]"
         >
           <div v-if="msg.type === 'thinking'" class="text-yellow-400 italic">
             &#x1f4ad; {{ msg.content }}

@@ -108,18 +108,25 @@ class MCPClient:
         conn.last_used_at = time.time()
         client = await self._get_client()
         url = conn.base_url if conn.single_endpoint else f"{conn.base_url}/tools/call"
-        resp = await client.post(
-            url,
-            json={
-                "jsonrpc": "2.0", "id": 3, "method": "tools/call",
-                "params": {"name": tool_name, "arguments": arguments},
-            },
-            headers=conn.headers, timeout=self.TOOL_CALL_TIMEOUT,
-        )
-        resp.raise_for_status()
+        payload = {
+            "jsonrpc": "2.0", "id": int(time.time() * 1000), "method": "tools/call",
+            "params": {"name": tool_name, "arguments": arguments},
+        }
+        try:
+            resp = await client.post(
+                url, json=payload, headers=conn.headers, timeout=self.TOOL_CALL_TIMEOUT,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"[MCP] tools/call HTTP {e.response.status_code}: {e.response.text[:500]}")
+            raise
+        except httpx.TimeoutException:
+            logger.error(f"[MCP] tools/call timeout after {self.TOOL_CALL_TIMEOUT}s")
+            raise
         data = resp.json()
         if "error" in data:
             err = data["error"]
+            logger.error(f"[MCP] tools/call JSON-RPC error: code={err.get('code')}, message={err.get('message')}")
             raise Exception(f"MCP Error [{err.get('code')}]: {err.get('message')}")
         content_parts = []
         for item in data.get("result", {}).get("content", []):

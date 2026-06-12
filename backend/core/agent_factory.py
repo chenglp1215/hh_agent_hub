@@ -1,3 +1,4 @@
+import json
 from typing import Dict, Any, List
 from langgraph.prebuilt import create_react_agent
 from langchain_core.tools import BaseTool
@@ -16,10 +17,34 @@ class _MCPTool(BaseTool):
     mcp_tool_name: str
 
     async def _arun(self, **kwargs) -> str:
-        return await mcp_client.call_tool(self.server_id, self.mcp_tool_name, kwargs)
+        logger.info(f"[MCP Tool] {self.mcp_tool_name} called with {json.dumps(kwargs, ensure_ascii=False, default=str)}")
+        try:
+            result = await mcp_client.call_tool(self.server_id, self.mcp_tool_name, kwargs)
+            logger.info(f"[MCP Tool] {self.mcp_tool_name} success, result length={len(result)}")
+            return result
+        except Exception as e:
+            logger.error(f"[MCP Tool] {self.mcp_tool_name} failed: {e}")
+            return f"工具调用失败 [{self.mcp_tool_name}]: {e}"
 
     def _run(self, **kwargs) -> str:
-        raise NotImplementedError("MCP 工具仅支持异步调用")
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                future = concurrent.futures.Future()
+                async def _call():
+                    try:
+                        result = await self._arun(**kwargs)
+                        future.set_result(result)
+                    except Exception as e:
+                        future.set_exception(e)
+                loop.create_task(_call())
+                return future.result(timeout=120)
+            else:
+                return loop.run_until_complete(self._arun(**kwargs))
+        except RuntimeError:
+            return asyncio.run(self._arun(**kwargs))
 
 
 class AgentNodeFactory:

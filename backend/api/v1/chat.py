@@ -1,4 +1,5 @@
 import uuid
+import asyncio
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
@@ -59,7 +60,7 @@ async def chat(req: ChatRequest, request: Request):
     })
 
 
-async def _build_agent_graph(session, message: str):
+async def _build_agent_graph(session, message: str, event_queue=None):
     """构建工作流图和初始状态（_execute_chat 和 _stream_chat 共用）"""
     messages = session.messages or []
     messages.append({"role": "user", "content": message})
@@ -96,7 +97,7 @@ async def _build_agent_graph(session, message: str):
                 } for ml in mcp_links],
                 "skills": [{"name": sl.skill.name, "skill_type": sl.skill.skill_type, "content": sl.skill.content} for sl in skill_links],
             }
-            node_fn = await agent_factory.create(config)
+            node_fn = await agent_factory.create(config, event_queue=event_queue)
             agent_nodes[agent.name] = node_fn
             agent_names.append(agent.name)
 
@@ -122,7 +123,7 @@ async def _build_agent_graph(session, message: str):
                 "skills": [{"name": sl.skill.name, "skill_type": sl.skill.skill_type, "content": sl.skill.content} for sl in skill_links],
                 "_available_workers": agent_names,
             }
-            sup_node_fn = await agent_factory.create(sup_config)
+            sup_node_fn = await agent_factory.create(sup_config, event_queue=event_queue)
             agent_nodes[sup_agent.name] = sup_node_fn
 
     graph = await workflow_engine.build_workflow(wf_config, agent_nodes)
@@ -182,73 +183,63 @@ async def _stream_chat(session: Session, message: str):
     yield await sse_event("thinking", {"content": "正在分析问题..."})
 
     try:
-        graph, initial_state, agent_names, flow_type = await _build_agent_graph(session, message)
+        event_queue = asyncio.Queue()
+        graph, initial_state, agent_names, flow_type = await _build_agent_graph(session, message, event_queue=event_queue)
         if graph is None:
             yield await sse_event("error", {"message": "工作流未配置"})
             return
 
         logger.info(f"开始执行工作流(stream): flow_type={flow_type}, workers={agent_names}")
         final_answer = ""
-        intermediate_results = {}
-
-        # astream with updates mode: yields {node_name: state_update} per node execution
         seen_outputs = set()
-        seen_tool_calls = set()
-        async for chunk in graph.astream(initial_state, stream_mode="updates"):
-            for node_name, update in chunk.items():
-                intermediate = update.get("intermediate_results") or {}
-                trace = update.get("trace") or []
-                node_messages = update.get("messages") or []
+        done = False
 
-                # Emit tool calls from this node's messages
-                for msg in node_messages:
-                    msg_type = getattr(msg, "type", "")
-                    if msg_type == "ai":
-                        tool_calls = getattr(msg, "tool_calls", []) or []
-                        for tc in tool_calls:
-                            tc_name = tc.get("name", "") if isinstance(tc, dict) else getattr(tc, "name", "")
-                            tc_args = tc.get("args", {}) if isinstance(tc, dict) else getattr(tc, "args", {})
-                            tc_key = f"{node_name}:{tc_name}:{str(tc_args)[:80]}"
-                            if tc_key not in seen_tool_calls:
-                                seen_tool_calls.add(tc_key)
-                                args_str = str(tc_args)[:200] if tc_args else "{}"
-                                yield await sse_event("tool_call", {
-                                    "agent": node_name if node_name != "supervisor" else "supervisor",
-                                    "tool": tc_name,
-                                    "args": args_str,
-                                })
-                    elif msg_type == "tool":
-                        tc_name = getattr(msg, "name", "")
-                        tc_content = str(getattr(msg, "content", ""))[:300]
-                        tc_key = f"result:{node_name}:{tc_name}:{tc_content[:40]}"
-                        if tc_key not in seen_tool_calls:
-                            seen_tool_calls.add(tc_key)
-                            yield await sse_event("tool_result", {
-                                "agent": node_name if node_name != "supervisor" else "supervisor",
-                                "tool": tc_name,
-                                "result": tc_content,
+        async def run_graph():
+            nonlocal final_answer, done
+            async for chunk in graph.astream(initial_state, stream_mode="updates"):
+                for node_name, update in chunk.items():
+                    intermediate = update.get("intermediate_results") or {}
+                    trace = update.get("trace") or []
+
+                    for t in trace:
+                        if t.get("type") == "supervisor_route":
+                            target = t.get("target", "end")
+                            if target != "end":
+                                await event_queue.put({"type": "agent_call", "agent": target})
+
+                    for agent_name, output in intermediate.items():
+                        if agent_name.startswith("_"):
+                            continue
+                        output_str = str(output)
+                        output_key = f"{agent_name}:{output_str[:50]}"
+                        if output_key not in seen_outputs:
+                            seen_outputs.add(output_key)
+                            await event_queue.put({
+                                "type": "agent_result",
+                                "agent": agent_name,
+                                "output": output_str[:500],
                             })
 
-                # Emit supervisor routing decisions
-                for t in trace:
-                    if t.get("type") == "supervisor_route":
-                        target = t.get("target", "end")
-                        if target != "end":
-                            yield await sse_event("agent_call", {"agent": target})
+                    # Track final answer
+                    for k, v in intermediate.items():
+                        if not k.startswith("_"):
+                            final_answer = str(v)
+            done = True
+            await event_queue.put({"type": "_done"})
 
-                # Emit agent outputs (non-internal, non-duplicate)
-                for agent_name, output in intermediate.items():
-                    if agent_name.startswith("_"):
-                        continue
-                    output_str = str(output)
-                    output_key = f"{agent_name}:{output_str[:50]}"
-                    if output_key in seen_outputs:
-                        continue
-                    seen_outputs.add(output_key)
-                    yield await sse_event("agent_result", {
-                        "agent": agent_name,
-                        "output": output_str[:500],
-                    })
+        # Run graph and consume events concurrently
+        graph_task = asyncio.create_task(run_graph())
+
+        while not done or not event_queue.empty():
+            try:
+                evt = await asyncio.wait_for(event_queue.get(), timeout=0.1)
+                if evt.get("type") == "_done":
+                    continue
+                yield await sse_event(evt["type"], {k: v for k, v in evt.items() if k != "type"})
+            except asyncio.TimeoutError:
+                continue
+
+        await graph_task
 
             # Accumulate final answer
             last_chunk = chunk.get(list(chunk.keys())[0], {}) if chunk else {}

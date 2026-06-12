@@ -1,4 +1,5 @@
 import json
+import asyncio
 from typing import Dict, Any, List, Optional
 from pydantic import create_model, Field
 from langgraph.prebuilt import create_react_agent
@@ -114,15 +115,12 @@ class AgentNodeFactory:
     def __init__(self):
         self.llm_manager = llm_manager
 
-    async def create_local_agent(self, agent_config: Dict[str, Any]):
+    async def create_local_agent(self, agent_config: Dict[str, Any], event_queue: asyncio.Queue = None):
         """创建 local 类型 Agent 的执行节点
 
-        local Agent 使用 LangGraph 的 create_react_agent 构建，
-        集成 LLM、MCP Tools、Skills 和知识库注入。
-
         Args:
-            agent_config: Agent 配置字典，包含 llm_config, mcp_servers, skills,
-                         system_prompt, knowledge_base_ids 等字段
+            agent_config: Agent 配置字典
+            event_queue: 可选，用于实时推送工具调用事件到 SSE 流
 
         Returns:
             异步函数，接收 state dict 并返回更新后的 state dict
@@ -184,28 +182,45 @@ class AgentNodeFactory:
             trace = state.get("trace") or []
             trace.append({"type": "agent_start", "agent": agent_name, "input_len": len(user_input)})
 
-            # 知识库注入（运行时根据用户输入动态检索并增强 Prompt）
             kb_ids = agent_config.get("knowledge_base_ids", [])
+            agent = react_agent
             if kb_ids and user_input:
-                injected_prompt = await knowledge_injector.inject(
-                    kb_ids, user_input, base_prompt
-                )
+                injected_prompt = await knowledge_injector.inject(kb_ids, user_input, base_prompt)
                 if skill_summary:
                     injected_prompt += "\n\n" + skill_summary
                 if routing_instruction:
                     injected_prompt += routing_instruction
-                # 使用注入后的 prompt 重建 agent
-                injected_agent = create_react_agent(
-                    model=llm, tools=tools,
-                    state_modifier=SystemMessage(content=injected_prompt),
-                )
-                result = await injected_agent.ainvoke({
-                    "messages": state.get("messages", []),
-                })
+                agent = create_react_agent(model=llm, tools=tools, state_modifier=SystemMessage(content=injected_prompt))
+
+            input_msgs = state.get("messages", [])
+
+            # Stream mode: push tool events in real-time via event_queue
+            if event_queue is not None:
+                all_messages = []
+                async for event in agent.astream_events(
+                    {"messages": input_msgs}, version="v2"
+                ):
+                    kind = event.get("event", "")
+                    data = event.get("data", {})
+                    if kind == "on_tool_start":
+                        await event_queue.put({
+                            "type": "tool_call",
+                            "agent": agent_name,
+                            "tool": event.get("name", ""),
+                            "args": str(data.get("input", {}))[:200],
+                        })
+                    elif kind == "on_tool_end":
+                        await event_queue.put({
+                            "type": "tool_result",
+                            "agent": agent_name,
+                            "tool": event.get("name", ""),
+                            "result": str(data.get("output", ""))[:300],
+                        })
+                    elif kind == "on_chain_end" and event.get("name") == "LangGraph":
+                        all_messages = data.get("output", {}).get("messages", [])
+                result = {"messages": all_messages}
             else:
-                result = await react_agent.ainvoke({
-                    "messages": state.get("messages", []),
-                })
+                result = await agent.ainvoke({"messages": input_msgs})
 
             # 提取最后一条消息的内容作为输出
             last_message = (

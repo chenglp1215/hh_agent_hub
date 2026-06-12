@@ -101,6 +101,7 @@ async def _execute_chat(session: Session, message: str) -> dict:
                     "agent_type": agent.agent_type,
                     "role": agent.role,
                     "llm_config": agent.llm_config,
+                    "llm_config_id": agent.llm_config_id,
                     "http_config": agent.http_config,
                     "claudecode_config": agent.claudecode_config,
                     "system_prompt": agent.system_prompt,

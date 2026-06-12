@@ -49,8 +49,8 @@ class AgentNodeFactory:
         agent_name = agent_config.get("name", "unknown")
         logger.info(f"Creating local agent: {agent_name}")
 
-        # 1. 初始化 LLM
-        llm_config = agent_config.get("llm_config", {})
+        # 1. 初始化 LLM（优先使用 llm_config_id 引用的系统配置）
+        llm_config = await self._resolve_llm_config(agent_config)
         llm = self.llm_manager.create(llm_config)
 
         # 2. 加载 MCP 工具（连接 MCP Server 并转换为 LangChain BaseTool）
@@ -164,6 +164,24 @@ class AgentNodeFactory:
                     f"'{server_cfg.get('name')}': {e}"
                 )
         return tools
+
+    async def _resolve_llm_config(self, agent_config: Dict[str, Any]) -> Dict[str, Any]:
+        """解析 LLM 配置：优先使用 llm_config_id 引用的系统配置"""
+        llm_config = agent_config.get("llm_config") or {}
+        llm_config_id = agent_config.get("llm_config_id")
+        if llm_config_id:
+            from models.llm_config import LlmConfig
+            sys_cfg = await LlmConfig.get_or_none(id=llm_config_id)
+            if sys_cfg:
+                llm_config = {
+                    "provider": sys_cfg.provider,
+                    "model": sys_cfg.model,
+                    "temperature": sys_cfg.temperature,
+                    "max_tokens": sys_cfg.max_tokens,
+                    "api_key": sys_cfg.api_key or llm_config.get("api_key"),
+                    "base_url": sys_cfg.base_url or llm_config.get("base_url"),
+                }
+        return llm_config
 
     def _load_skills_context(self, skills: List[Dict[str, Any]]) -> str:
         """将 Skills 转换为 Prompt 上下文文本

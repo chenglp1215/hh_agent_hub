@@ -50,10 +50,12 @@
         <a-menu-item key="/monitor/chat-test">对话测试</a-menu-item>
       </a-sub-menu>
 
-      <a-menu-item key="/settings" v-if="userStore.isAdmin">
+      <a-sub-menu key="settings" v-if="userStore.isAdmin">
         <template #icon><SettingOutlined /></template>
-        <span>系统设置</span>
-      </a-menu-item>
+        <template #title>系统设置</template>
+        <a-menu-item key="/settings">基础配置</a-menu-item>
+        <a-menu-item key="/settings/llm-configs">LLM 配置</a-menu-item>
+      </a-sub-menu>
     </a-menu>
   </a-layout-sider>
 </template>
@@ -72,7 +74,7 @@ const route = useRoute()
 const userStore = useUserStore()
 const collapsed = ref(false)
 const selectedKeys = ref<string[]>([route.path])
-const openKeys = ref<string[]>(['agents', 'workflows', 'apps', 'resources', 'monitor'])
+const openKeys = ref<string[]>(['agents', 'workflows', 'apps', 'resources', 'monitor', 'settings'])
 
 watch(() => route.path, (path) => {
   selectedKeys.value = [path]

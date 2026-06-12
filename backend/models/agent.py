@@ -9,6 +9,7 @@ class Agent(Model):
     role = fields.CharField(max_length=20)
     agent_type = fields.CharField(max_length=20, default="local")
     llm_config = fields.JSONField(null=True)
+    llm_config_id = fields.IntField(null=True)
     http_config = fields.JSONField(null=True)
     claudecode_config = fields.JSONField(null=True)
     system_prompt = fields.TextField(null=True)

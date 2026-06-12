@@ -57,7 +57,8 @@ async def get_agent(agent_id: int, user=Depends(get_current_user)):
     return success(data={
         "id": a.id, "name": a.name, "display_name": a.display_name,
         "description": a.description, "role": a.role, "agent_type": a.agent_type,
-        "llm_config": a.llm_config, "http_config": a.http_config,
+        "llm_config": a.llm_config, "llm_config_id": a.llm_config_id,
+        "http_config": a.http_config,
         "claudecode_config": a.claudecode_config, "system_prompt": a.system_prompt,
         "status": a.status, "knowledge_base_ids": a.knowledge_base_ids,
         "mcp_links": [{"id": ml.id, "mcp_server": {"id": ml.mcp_server.id, "name": ml.mcp_server.name}, "enabled_tools": ml.enabled_tools, "enabled": ml.enabled} for ml in mcp_links],
@@ -78,6 +79,7 @@ async def create_agent(body: AgentCreate, user=Depends(get_current_user)):
         name=body.name, display_name=body.display_name,
         description=body.description, role=body.role,
         agent_type=body.agent_type,
+        llm_config_id=body.llm_config_id,
         llm_config=body.llm_config, http_config=body.http_config,
         claudecode_config=body.claudecode_config,
         system_prompt=body.system_prompt,
@@ -110,7 +112,7 @@ async def update_agent(agent_id: int, body: AgentUpdate, user=Depends(get_curren
         return error(code=404, message="Agent 不存在")
 
     updatable = ["display_name", "description", "role", "agent_type",
-                 "llm_config", "http_config", "claudecode_config",
+                 "llm_config_id", "llm_config", "http_config", "claudecode_config",
                  "system_prompt", "status"]
     for field in updatable:
         val = getattr(body, field, None)
@@ -169,7 +171,8 @@ async def test_agent(agent_id: int, body: AgentTestRequest, user=Depends(get_cur
 
         config = {
             "name": a.name, "agent_type": a.agent_type, "role": a.role,
-            "llm_config": a.llm_config, "http_config": a.http_config,
+            "llm_config": a.llm_config, "llm_config_id": a.llm_config_id,
+            "http_config": a.http_config,
             "claudecode_config": a.claudecode_config,
             "system_prompt": a.system_prompt,
             "mcp_servers": [{

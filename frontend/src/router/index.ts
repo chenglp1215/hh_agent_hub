@@ -41,6 +41,7 @@ const router = createRouter({
         { path: 'monitor/chat-test', name: 'ChatTest', component: () => import('@/views/ChatTest.vue'), meta: { title: '对话测试' } },
         // System settings
         { path: 'settings', name: 'SystemConfig', component: () => import('@/views/SystemConfig.vue'), meta: { title: '系统配置', requireAdmin: true } },
+        { path: 'settings/llm-configs', name: 'LlmConfigList', component: () => import('@/views/LlmConfigList.vue'), meta: { title: 'LLM 配置', requireAdmin: true } },
       ],
     },
     { path: '/:pathMatch(.*)*', name: 'NotFound', component: () => import('@/views/NotFound.vue') },

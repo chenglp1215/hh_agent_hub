@@ -9,6 +9,9 @@ router.include_router(auth_router)
 from api.v1.configs import router as configs_router
 router.include_router(configs_router)
 
+from api.v1.llm_configs import router as llm_configs_router
+router.include_router(llm_configs_router)
+
 
 from api.v1.mcp_servers import router as mcp_servers_router
 router.include_router(mcp_servers_router)

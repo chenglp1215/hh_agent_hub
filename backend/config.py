@@ -51,6 +51,7 @@ TORTOISE_ORM = {
             "models": [
                 "models.sys_config",
                 "models.user",
+                "models.llm_config",
                 "models.agent",
                 "models.workflow",
                 "models.app",

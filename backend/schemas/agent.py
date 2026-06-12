@@ -8,6 +8,7 @@ class AgentCreate(BaseModel):
     description: Optional[str] = None
     role: str = "worker"
     agent_type: str = "local"
+    llm_config_id: Optional[int] = None
     llm_config: Optional[Dict[str, Any]] = None
     http_config: Optional[Dict[str, Any]] = None
     claudecode_config: Optional[Dict[str, Any]] = None
@@ -22,6 +23,7 @@ class AgentUpdate(BaseModel):
     description: Optional[str] = None
     role: Optional[str] = None
     agent_type: Optional[str] = None
+    llm_config_id: Optional[int] = None
     llm_config: Optional[Dict[str, Any]] = None
     http_config: Optional[Dict[str, Any]] = None
     claudecode_config: Optional[Dict[str, Any]] = None

@@ -54,44 +54,67 @@
         <!-- LLM Config (local agent) -->
         <template v-if="form.agent_type === 'local'">
           <h3 class="text-lg font-semibold mb-4 mt-4 text-[#5e6ad2]">LLM 配置</h3>
-          <a-row :gutter="16">
-            <a-col :span="8">
-              <a-form-item label="提供商">
-                <a-select v-model:value="llmConfig.provider">
-                  <a-select-option value="openai">OpenAI</a-select-option>
-                  <a-select-option value="anthropic">Anthropic</a-select-option>
-                  <a-select-option value="ollama">Ollama</a-select-option>
-                </a-select>
-              </a-form-item>
-            </a-col>
-            <a-col :span="8">
-              <a-form-item label="模型">
-                <a-input v-model:value="llmConfig.model" placeholder="gpt-4o-mini" />
-              </a-form-item>
-            </a-col>
-            <a-col :span="4">
-              <a-form-item label="温度">
-                <a-input-number v-model:value="llmConfig.temperature" :min="0" :max="2" :step="0.1" class="w-full" />
-              </a-form-item>
-            </a-col>
-            <a-col :span="4">
-              <a-form-item label="Max Tokens">
-                <a-input-number v-model:value="llmConfig.max_tokens" :min="100" :max="128000" class="w-full" />
-              </a-form-item>
-            </a-col>
-          </a-row>
-          <a-row :gutter="16">
-            <a-col :span="12">
-              <a-form-item label="API Key">
-                <a-input-password v-model:value="llmConfig.api_key" placeholder="sk-..." />
-              </a-form-item>
-            </a-col>
-            <a-col :span="12">
-              <a-form-item label="Base URL">
-                <a-input v-model:value="llmConfig.base_url" placeholder="https://api.openai.com/v1" />
-              </a-form-item>
-            </a-col>
-          </a-row>
+
+          <a-form-item label="选择系统配置">
+            <a-radio-group v-model:value="llmMode" button-style="solid">
+              <a-radio-button value="select">选用已有配置</a-radio-button>
+              <a-radio-button value="manual">手动填写</a-radio-button>
+            </a-radio-group>
+          </a-form-item>
+
+          <template v-if="llmMode === 'select'">
+            <a-form-item label="LLM 配置">
+              <a-select
+                v-model:value="llmConfigId"
+                placeholder="选择 LLM 配置..."
+                :options="llmConfigOptions"
+                show-search
+                filter-option
+                allow-clear
+              />
+            </a-form-item>
+          </template>
+
+          <template v-else>
+            <a-row :gutter="16">
+              <a-col :span="8">
+                <a-form-item label="提供商">
+                  <a-select v-model:value="llmConfig.provider">
+                    <a-select-option value="openai">OpenAI</a-select-option>
+                    <a-select-option value="anthropic">Anthropic</a-select-option>
+                    <a-select-option value="ollama">Ollama</a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="模型">
+                  <a-input v-model:value="llmConfig.model" placeholder="gpt-4o-mini" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="4">
+                <a-form-item label="温度">
+                  <a-input-number v-model:value="llmConfig.temperature" :min="0" :max="2" :step="0.1" class="w-full" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="4">
+                <a-form-item label="Max Tokens">
+                  <a-input-number v-model:value="llmConfig.max_tokens" :min="100" :max="128000" class="w-full" />
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-row :gutter="16">
+              <a-col :span="12">
+                <a-form-item label="API Key">
+                  <a-input-password v-model:value="llmConfig.api_key" placeholder="sk-..." />
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="Base URL">
+                  <a-input v-model:value="llmConfig.base_url" placeholder="https://api.openai.com/v1" />
+                </a-form-item>
+              </a-col>
+            </a-row>
+          </template>
         </template>
 
         <!-- HTTP Config -->
@@ -184,6 +207,7 @@ import { agentsApi } from '@/api/agents'
 import McpServerSelector from '@/components/McpServerSelector.vue'
 import KnowledgeBaseSelector from '@/components/KnowledgeBaseSelector.vue'
 import SkillsSelector from '@/components/SkillsSelector.vue'
+import { llmConfigsApi } from '@/api/llmConfigs'
 
 const props = defineProps<{ id?: string }>()
 
@@ -214,6 +238,16 @@ const httpConfig = ref<any>({
   endpoint: '/chat',
   timeout: 30,
 })
+const llmMode = ref<'select' | 'manual'>('manual')
+const llmConfigId = ref<number | null>(null)
+const llmConfigOptions = ref<{ value: number; label: string }[]>([])
+
+async function loadLlmConfigOptions() {
+  try {
+    const res = await llmConfigsApi.list()
+    llmConfigOptions.value = (res.data.data || []).map((c: any) => ({ value: c.id, label: `${c.name} (${c.provider}/${c.model})` }))
+  } catch { /* ignore */ }
+}
 const httpConfigHeaders = ref('{}')
 const ccConfig = ref<any>({
   model: 'claude-sonnet-4-6',
@@ -241,7 +275,11 @@ async function loadAgent() {
       status: d.status,
       system_prompt: d.system_prompt || '',
     }
-    if (d.llm_config) {
+    if (d.llm_config_id) {
+      llmMode.value = 'select'
+      llmConfigId.value = d.llm_config_id
+    } else if (d.llm_config) {
+      llmMode.value = 'manual'
       llmConfig.value = { ...llmConfig.value, ...d.llm_config }
     }
     if (d.http_config) {
@@ -266,7 +304,13 @@ async function loadAgent() {
 function buildFormData() {
   const data: any = { ...form.value }
   if (form.value.agent_type === 'local') {
-    data.llm_config = llmConfig.value
+    if (llmMode.value === 'select' && llmConfigId.value) {
+      data.llm_config_id = llmConfigId.value
+      data.llm_config = null
+    } else {
+      data.llm_config_id = null
+      data.llm_config = llmConfig.value
+    }
   }
   if (form.value.agent_type === 'http') {
     try {
@@ -311,6 +355,7 @@ async function handleSubmit() {
 }
 
 onMounted(() => {
+  loadLlmConfigOptions()
   if (isEdit.value) {
     loadAgent()
   }

@@ -2,7 +2,13 @@
   <div>
     <h1 class="text-2xl font-bold mb-6">系统设置</h1>
 
-    <a-card title="LLM 默认配置" class="max-w-2xl mb-4">
+    <a-card class="max-w-2xl mb-4">
+      <template #title>
+        <div class="flex items-center justify-between">
+          <span>LLM 默认配置</span>
+          <a-button size="small" type="primary" ghost @click="$router.push('/settings/llm-configs')">管理配置</a-button>
+        </div>
+      </template>
       <a-form layout="vertical">
         <a-row :gutter="16">
           <a-col :span="12">

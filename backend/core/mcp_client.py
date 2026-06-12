@@ -128,8 +128,14 @@ class MCPClient:
             err = data["error"]
             logger.error(f"[MCP] tools/call JSON-RPC error: code={err.get('code')}, message={err.get('message')}")
             raise Exception(f"MCP Error [{err.get('code')}]: {err.get('message')}")
+        result = data.get("result")
+        if result is None:
+            logger.warning(f"[MCP] tools/call returned null result: {resp.text[:300]}")
+            return ""  # empty result = no output (not an error)
         content_parts = []
-        for item in data.get("result", {}).get("content", []):
+        for item in (result.get("content") or []):
+            if item is None:
+                continue
             if item.get("type") == "text":
                 content_parts.append(item["text"])
             elif item.get("type") == "resource":

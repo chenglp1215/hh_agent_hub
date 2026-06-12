@@ -5,9 +5,10 @@ from loguru import logger
 
 
 class McpServerConnection:
-    def __init__(self, base_url: str, headers: Dict[str, str]):
+    def __init__(self, base_url: str, headers: Dict[str, str], single_endpoint: bool = False):
         self.base_url = base_url
         self.headers = headers
+        self.single_endpoint = single_endpoint
         self.initialized = False
         self.tools: List[Dict] = []
         self.last_used_at = time.time()
@@ -26,7 +27,7 @@ class MCPClient:
             self._client = httpx.AsyncClient(timeout=self.REQUEST_TIMEOUT)
         return self._client
 
-    async def connect(self, server_id: int, base_url: str, headers: Dict[str, str] = None) -> McpServerConnection:
+    async def connect(self, server_id: int, base_url: str, headers: Dict[str, str] = None, single_endpoint: bool = False) -> McpServerConnection:
         base_url = base_url.rstrip("/")
         headers = headers or {}
 
@@ -36,11 +37,12 @@ class MCPClient:
                 conn.last_used_at = time.time()
                 return conn
 
-        conn = McpServerConnection(base_url=base_url, headers=headers)
+        conn = McpServerConnection(base_url=base_url, headers=headers, single_endpoint=single_endpoint)
         client = await self._get_client()
 
+        init_url = base_url if single_endpoint else f"{base_url}/initialize"
         resp = await client.post(
-            f"{base_url}/initialize",
+            init_url,
             json={
                 "jsonrpc": "2.0", "id": 1, "method": "initialize",
                 "params": {
@@ -53,21 +55,23 @@ class MCPClient:
         )
         resp.raise_for_status()
 
+        notif_url = base_url if single_endpoint else f"{base_url}/notifications/initialized"
         await client.post(
-            f"{base_url}/notifications/initialized",
+            notif_url,
             json={"jsonrpc": "2.0", "method": "notifications/initialized"},
             headers=headers,
         )
         conn.initialized = True
         self._connections[server_id] = conn
-        logger.info(f"MCP [{base_url}] connected")
+        logger.info(f"MCP [{base_url}] connected (single_endpoint={single_endpoint})")
         return conn
 
     async def ping(self, conn: McpServerConnection) -> bool:
         try:
             client = await self._get_client()
+            url = conn.base_url if conn.single_endpoint else f"{conn.base_url}/ping"
             resp = await client.post(
-                f"{conn.base_url}/ping",
+                url,
                 json={"jsonrpc": "2.0", "id": 0, "method": "ping"},
                 headers=conn.headers, timeout=5,
             )
@@ -80,8 +84,9 @@ class MCPClient:
         if not conn:
             raise ValueError(f"MCP Server {server_id} not connected")
         client = await self._get_client()
+        url = conn.base_url if conn.single_endpoint else f"{conn.base_url}/tools/list"
         resp = await client.post(
-            f"{conn.base_url}/tools/list",
+            url,
             json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
             headers=conn.headers,
         )
@@ -102,8 +107,9 @@ class MCPClient:
             raise ValueError(f"MCP Server {server_id} not connected")
         conn.last_used_at = time.time()
         client = await self._get_client()
+        url = conn.base_url if conn.single_endpoint else f"{conn.base_url}/tools/call"
         resp = await client.post(
-            f"{conn.base_url}/tools/call",
+            url,
             json={
                 "jsonrpc": "2.0", "id": 3, "method": "tools/call",
                 "params": {"name": tool_name, "arguments": arguments},

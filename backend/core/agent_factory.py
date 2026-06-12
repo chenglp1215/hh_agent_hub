@@ -136,7 +136,8 @@ class AgentNodeFactory:
                     continue
 
                 # 连接 MCP Server
-                await mcp_client.connect(server_id, base_url, headers)
+                single_endpoint = server_cfg.get("single_endpoint", False)
+                await mcp_client.connect(server_id, base_url, headers, single_endpoint=single_endpoint)
 
                 # 发现工具列表
                 raw_tools = await mcp_client.discover_tools(server_id)

@@ -84,6 +84,8 @@ async def _execute_chat(session: Session, message: str) -> dict:
         from core.workflow_engine import workflow_engine, AgentState
         from core.agent_factory import agent_factory
         from models.agent import Agent
+        from models.mcp_server import AgentMcpLink
+        from models.skill import AgentSkillLink
 
         # 构建 Agent 节点
         worker_ids = workflow.worker_agent_ids or []
@@ -92,6 +94,8 @@ async def _execute_chat(session: Session, message: str) -> dict:
         for wid in worker_ids:
             agent = await Agent.get_or_none(id=wid)
             if agent:
+                mcp_links = await AgentMcpLink.filter(agent_id=agent.id).prefetch_related("mcp_server")
+                skill_links = await AgentSkillLink.filter(agent_id=agent.id).prefetch_related("skill")
                 config = {
                     "name": agent.name,
                     "agent_type": agent.agent_type,
@@ -101,8 +105,15 @@ async def _execute_chat(session: Session, message: str) -> dict:
                     "claudecode_config": agent.claudecode_config,
                     "system_prompt": agent.system_prompt,
                     "knowledge_base_ids": agent.knowledge_base_ids or [],
-                    "mcp_servers": [],
-                    "skills": [],
+                    "mcp_servers": [{
+                        "id": ml.mcp_server.id, "name": ml.mcp_server.name,
+                        "base_url": ml.mcp_server.base_url,
+                        "headers": ml.mcp_server.headers,
+                        "single_endpoint": ml.mcp_server.single_endpoint,
+                        "enabled_tools": ml.enabled_tools,
+                        "enabled": ml.enabled,
+                    } for ml in mcp_links],
+                    "skills": [{"name": sl.skill.name, "skill_type": sl.skill.skill_type, "content": sl.skill.content} for sl in skill_links],
                 }
                 node_fn = await agent_factory.create(config)
                 agent_nodes[agent.name] = node_fn
@@ -117,6 +128,8 @@ async def _execute_chat(session: Session, message: str) -> dict:
         if workflow.flow_type == "supervisor" and workflow.supervisor_agent_id:
             sup_agent = await Agent.get_or_none(id=workflow.supervisor_agent_id)
             if sup_agent:
+                mcp_links = await AgentMcpLink.filter(agent_id=sup_agent.id).prefetch_related("mcp_server")
+                skill_links = await AgentSkillLink.filter(agent_id=sup_agent.id).prefetch_related("skill")
                 wf_config["supervisor_agent_name"] = sup_agent.name
                 sup_config = {
                     "name": sup_agent.name,
@@ -125,8 +138,15 @@ async def _execute_chat(session: Session, message: str) -> dict:
                     "llm_config": sup_agent.llm_config,
                     "system_prompt": sup_agent.system_prompt,
                     "knowledge_base_ids": sup_agent.knowledge_base_ids or [],
-                    "mcp_servers": [],
-                    "skills": [],
+                    "mcp_servers": [{
+                        "id": ml.mcp_server.id, "name": ml.mcp_server.name,
+                        "base_url": ml.mcp_server.base_url,
+                        "headers": ml.mcp_server.headers,
+                        "single_endpoint": ml.mcp_server.single_endpoint,
+                        "enabled_tools": ml.enabled_tools,
+                        "enabled": ml.enabled,
+                    } for ml in mcp_links],
+                    "skills": [{"name": sl.skill.name, "skill_type": sl.skill.skill_type, "content": sl.skill.content} for sl in skill_links],
                 }
                 sup_node_fn = await agent_factory.create(sup_config)
                 agent_nodes[sup_agent.name] = sup_node_fn

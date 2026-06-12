@@ -15,6 +15,7 @@ async def list_mcp_servers(user=Depends(get_current_user)):
     return success(data=[{
         "id": s.id, "name": s.name, "display_name": s.display_name,
         "description": s.description, "base_url": s.base_url,
+        "headers": s.headers, "single_endpoint": s.single_endpoint,
         "discovered_tools": s.discovered_tools, "status": s.status,
         "timeout": s.timeout,
         "last_checked_at": s.last_checked_at.isoformat() if s.last_checked_at else None,
@@ -30,7 +31,8 @@ async def get_mcp_server(server_id: int, user=Depends(get_current_user)):
     return success(data={
         "id": s.id, "name": s.name, "display_name": s.display_name,
         "description": s.description, "base_url": s.base_url,
-        "headers": s.headers, "timeout": s.timeout,
+        "headers": s.headers, "single_endpoint": s.single_endpoint,
+        "timeout": s.timeout,
         "discovered_tools": s.discovered_tools, "status": s.status,
     })
 
@@ -43,7 +45,8 @@ async def create_mcp_server(body: McpServerCreate, user=Depends(require_admin)):
     s = await McpServerRegistry.create(
         name=body.name, display_name=body.display_name,
         description=body.description, base_url=body.base_url.rstrip("/"),
-        headers=body.headers or {}, timeout=body.timeout,
+        headers=body.headers or {}, single_endpoint=body.single_endpoint,
+        timeout=body.timeout,
         created_by=user,
     )
     return success(data={"id": s.id, "name": s.name}, message="注册成功")
@@ -62,6 +65,8 @@ async def update_mcp_server(server_id: int, body: McpServerUpdate, user=Depends(
         s.base_url = body.base_url.rstrip("/")
     if body.headers is not None:
         s.headers = body.headers
+    if body.single_endpoint is not None:
+        s.single_endpoint = body.single_endpoint
     if body.timeout is not None:
         s.timeout = body.timeout
     await s.save()
@@ -83,7 +88,7 @@ async def discover_tools(server_id: int, user=Depends(require_admin)):
     if not s:
         return error(code=404, message="MCP Server 不存在")
     try:
-        await mcp_client.connect(server_id, s.base_url, s.headers)
+        await mcp_client.connect(server_id, s.base_url, s.headers, single_endpoint=s.single_endpoint)
         tools = await mcp_client.discover_tools(server_id)
         s.discovered_tools = tools
         s.status = "active"
@@ -102,7 +107,7 @@ async def test_connection(server_id: int, user=Depends(require_admin)):
     if not s:
         return error(code=404, message="MCP Server 不存在")
     try:
-        conn = await mcp_client.connect(server_id, s.base_url, s.headers)
+        conn = await mcp_client.connect(server_id, s.base_url, s.headers, single_endpoint=s.single_endpoint)
         ok = await mcp_client.ping(conn)
         return success(data={"connected": ok})
     except Exception as e:

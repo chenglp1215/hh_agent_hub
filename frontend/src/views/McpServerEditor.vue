@@ -18,6 +18,21 @@
         <a-form-item label="超时(秒)">
           <a-input-number v-model:value="form.timeout" :min="5" :max="300" class="w-full" />
         </a-form-item>
+        <a-form-item label="单端点模式">
+          <a-switch v-model:checked="form.single_endpoint" />
+          <span class="ml-2" style="color:#8a8f98;font-size:13px;">
+            所有请求发到同一个 Base URL，method 区分在 JSON-RPC body 中
+          </span>
+        </a-form-item>
+        <a-form-item label="Headers (JSON)">
+          <a-textarea
+            v-model:value="headersText"
+            :rows="4"
+            placeholder='{"Authorization": "Bearer xxx", "X-Custom": "value"}'
+            @change="parseHeaders"
+          />
+          <div style="color:#8a8f98;font-size:12px;margin-top:4px;">JSON 格式，留空表示无自定义 Headers</div>
+        </a-form-item>
         <a-form-item>
           <a-space>
             <a-button type="primary" html-type="submit" :loading="submitting">
@@ -41,17 +56,34 @@ const route = useRoute()
 const router = useRouter()
 const isEdit = computed(() => !!route.params.id)
 const submitting = ref(false)
-const form = ref({ name: '', display_name: '', description: '', base_url: '', timeout: 30 })
+const form = ref({ name: '', display_name: '', description: '', base_url: '', timeout: 30, single_endpoint: false, headers: {} })
+const headersText = ref('')
+
+function parseHeaders() {
+  try {
+    form.value.headers = headersText.value.trim() ? JSON.parse(headersText.value) : {}
+  } catch {
+    // 用户还没输入完，不报错
+  }
+}
 
 onMounted(async () => {
   if (isEdit.value) {
     const res = await mcpServersApi.get(Number(route.params.id))
     const d = res.data.data
-    form.value = { name: d.name, display_name: d.display_name || '', description: d.description || '', base_url: d.base_url, timeout: d.timeout }
+    form.value = {
+      name: d.name, display_name: d.display_name || '', description: d.description || '',
+      base_url: d.base_url, timeout: d.timeout,
+      single_endpoint: d.single_endpoint || false,
+      headers: d.headers || {},
+    }
+    headersText.value = d.headers && Object.keys(d.headers).length ? JSON.stringify(d.headers, null, 2) : ''
   }
 })
 
 async function handleSubmit() {
+  // 提交前再解析一次确保 headers 最新
+  parseHeaders()
   submitting.value = true
   try {
     if (isEdit.value) {

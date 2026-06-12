@@ -176,6 +176,7 @@ async def test_agent(agent_id: int, body: AgentTestRequest, user=Depends(get_cur
                 "id": ml.mcp_server.id, "name": ml.mcp_server.name,
                 "base_url": ml.mcp_server.base_url,
                 "headers": ml.mcp_server.headers,
+                "single_endpoint": ml.mcp_server.single_endpoint,
                 "enabled_tools": ml.enabled_tools,
                 "enabled": ml.enabled,
             } for ml in mcp_links],

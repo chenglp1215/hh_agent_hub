@@ -9,6 +9,7 @@ class McpServerRegistry(Model):
     base_url = fields.CharField(max_length=500)
     headers = fields.JSONField(default=dict)
     timeout = fields.IntField(default=30)
+    single_endpoint = fields.BooleanField(default=False)
     discovered_tools = fields.JSONField(default=list)
     status = fields.CharField(max_length=20, default="active")
     last_checked_at = fields.DatetimeField(null=True)

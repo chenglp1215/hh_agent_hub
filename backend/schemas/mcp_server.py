@@ -8,6 +8,7 @@ class McpServerCreate(BaseModel):
     description: Optional[str] = None
     base_url: str = Field(..., max_length=500)
     headers: Optional[Dict[str, str]] = {}
+    single_endpoint: bool = False
     timeout: int = 30
 
 
@@ -16,4 +17,5 @@ class McpServerUpdate(BaseModel):
     description: Optional[str] = None
     base_url: Optional[str] = None
     headers: Optional[Dict[str, str]] = None
+    single_endpoint: Optional[bool] = None
     timeout: Optional[int] = None

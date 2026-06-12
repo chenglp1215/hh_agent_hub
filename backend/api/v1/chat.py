@@ -137,6 +137,7 @@ async def _execute_chat(session: Session, message: str) -> dict:
                     "agent_type": sup_agent.agent_type,
                     "role": sup_agent.role,
                     "llm_config": sup_agent.llm_config,
+                    "llm_config_id": sup_agent.llm_config_id,
                     "system_prompt": sup_agent.system_prompt,
                     "knowledge_base_ids": sup_agent.knowledge_base_ids or [],
                     "mcp_servers": [{

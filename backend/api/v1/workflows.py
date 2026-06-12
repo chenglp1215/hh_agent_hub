@@ -89,20 +89,16 @@ async def create_workflow(body: WorkflowCreate, user=Depends(get_current_user)):
 
 @router.put("/{workflow_id}")
 async def update_workflow(workflow_id: int, body: WorkflowUpdate, user=Depends(get_current_user)):
-    with open("/tmp/debug_put.log", "a") as f:
-        f.write(f"1.ENTER wids={body.worker_agent_ids} sid={body.supervisor_agent_id}\n")
     w = await Workflow.get_or_none(id=workflow_id)
-    with open("/tmp/debug_put.log", "a") as f:
-        f.write(f"2.GOT_WORKFLOW w={w.id if w else None} status={w.status if w else None}\n")
     if not w:
         return error(code=404, message="工作流不存在")
 
     if w.status == "published":
         return error(code=400, message="已发布的工作流不可直接编辑，请先归档")
 
+    # Non-JSON fields via setattr
     updatable = [
         "name", "description", "flow_type", "supervisor_agent_id",
-        "edges", "parallel_groups", "human_interrupts",
         "error_strategy", "agent_timeout_seconds", "workflow_timeout_seconds",
         "max_retries",
     ]
@@ -111,23 +107,38 @@ async def update_workflow(workflow_id: int, body: WorkflowUpdate, user=Depends(g
         if val is not None:
             setattr(w, field, val)
 
-    # worker_agent_ids explicitly — Tortoise JSONField needs explicit assignment
-    if body.worker_agent_ids is not None:
-        w.worker_agent_ids = list(body.worker_agent_ids)
-        with open("/tmp/debug_put.log", "a") as f:
-            f.write(f"SET wids={w.worker_agent_ids}\n")
-    else:
-        with open("/tmp/debug_put.log", "a") as f:
-            f.write("wids IS NONE\n")
-
     if body.status is not None:
         w.status = body.status
 
     w.version += 1
     await w.save()
-    await w.refresh_from_db(fields=["worker_agent_ids"])
-    with open("/tmp/debug_put.log", "a") as f:
-        f.write(f"SAVED wids={w.worker_agent_ids}\n")
+
+    # JSON fields via direct UPDATE to bypass Tortoise dirty-tracking
+    from tortoise import connections
+    conn = connections.get("default")
+    import json as _json
+    if body.worker_agent_ids is not None:
+        await conn.execute_query(
+            "UPDATE workflows SET worker_agent_ids = %s WHERE id = %s",
+            [_json.dumps(body.worker_agent_ids), workflow_id],
+        )
+        logger.info(f"Workflow {workflow_id} worker_agent_ids updated to {body.worker_agent_ids}")
+    if body.edges is not None:
+        await conn.execute_query(
+            "UPDATE workflows SET edges = %s WHERE id = %s",
+            [_json.dumps(body.edges), workflow_id],
+        )
+    if body.parallel_groups is not None:
+        await conn.execute_query(
+            "UPDATE workflows SET parallel_groups = %s WHERE id = %s",
+            [_json.dumps(body.parallel_groups), workflow_id],
+        )
+    if body.human_interrupts is not None:
+        await conn.execute_query(
+            "UPDATE workflows SET human_interrupts = %s WHERE id = %s",
+            [_json.dumps(body.human_interrupts), workflow_id],
+        )
+
     return success(message="更新成功")
 
 

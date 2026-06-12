@@ -191,45 +191,36 @@ async def _stream_chat(session: Session, message: str):
         intermediate_results = {}
 
         # astream with updates mode: yields {node_name: state_update} per node execution
+        seen_outputs = set()
         async for chunk in graph.astream(initial_state, stream_mode="updates"):
             for node_name, update in chunk.items():
-                if node_name == "supervisor":
-                    # Supervisor wrapper output — route decision already made
-                    intermediate = update.get("intermediate_results") or {}
-                    for agent_name, output in intermediate.items():
-                        if agent_name.startswith("_"):
-                            continue
-                        if agent_name not in intermediate_results or intermediate_results.get(agent_name) != output:
-                            intermediate_results[agent_name] = output
-                            yield await sse_event("agent_call", {"agent": agent_name})
-                            yield await sse_event("agent_result", {"agent": agent_name, "output": str(output)[:300]})
-                else:
-                    # Worker agent output
-                    intermediate = update.get("intermediate_results") or {}
-                    for agent_name, output in intermediate.items():
-                        if agent_name.startswith("_"):
-                            continue
-                        if agent_name not in intermediate_results:
-                            yield await sse_event("agent_call", {"agent": agent_name, "input": message[:200]})
-                        intermediate_results[agent_name] = output
-                        yield await sse_event("agent_result", {"agent": agent_name, "output": str(output)[:500]})
-
-                # Also emit trace events
+                intermediate = update.get("intermediate_results") or {}
                 trace = update.get("trace") or []
-                for t in trace:
-                    if t.get("type") == "agent_start":
-                        pass  # handled above
-                    elif t.get("type") == "agent_end":
-                        pass
-                    elif t.get("type") == "supervisor_route":
-                        yield await sse_event("agent_call", {
-                            "agent": f"路由: {t.get('target', '?')}",
-                            "input": message[:100],
-                        })
 
-            # Accumulate final answer from last result
-            current = chunk.get(list(chunk.keys())[0], {}) if chunk else {}
-            im = current.get("intermediate_results") or {}
+                # Emit supervisor routing decisions
+                for t in trace:
+                    if t.get("type") == "supervisor_route":
+                        target = t.get("target", "end")
+                        if target != "end":
+                            yield await sse_event("agent_call", {"agent": target})
+
+                # Emit agent outputs (non-internal, non-duplicate)
+                for agent_name, output in intermediate.items():
+                    if agent_name.startswith("_"):
+                        continue
+                    output_str = str(output)
+                    output_key = f"{agent_name}:{output_str[:50]}"
+                    if output_key in seen_outputs:
+                        continue
+                    seen_outputs.add(output_key)
+                    yield await sse_event("agent_result", {
+                        "agent": agent_name,
+                        "output": output_str[:500],
+                    })
+
+            # Accumulate final answer
+            last_chunk = chunk.get(list(chunk.keys())[0], {}) if chunk else {}
+            im = last_chunk.get("intermediate_results") or {}
             if im:
                 last_key = [k for k in im if not k.startswith("_")]
                 if last_key:

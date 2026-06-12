@@ -91,6 +91,7 @@ class AgentNodeFactory:
         # 6. 返回节点函数
         async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
             user_input = state.get("user_input", "")
+            logger.info(f"[Agent: {agent_name}] 开始执行，输入长度={len(user_input)}")
 
             # 知识库注入（运行时根据用户输入动态检索并增强 Prompt）
             kb_ids = agent_config.get("knowledge_base_ids", [])
@@ -125,6 +126,7 @@ class AgentNodeFactory:
             intermediate = state.get("intermediate_results", {})
             intermediate[agent_name] = output
 
+            logger.info(f"[Agent: {agent_name}] 执行完成，输出长度={len(output)}")
             return {
                 "messages": result.get("messages", []),
                 "intermediate_results": intermediate,

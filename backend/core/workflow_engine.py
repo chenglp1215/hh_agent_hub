@@ -72,6 +72,7 @@ class WorkflowEngine:
 
         # Add supervisor node (wrapped to parse routing decision)
         async def supervisor_wrapper(state: AgentState) -> dict:
+            logger.info(f"[Supervisor: {supervisor_name}] 开始调度决策")
             result = await supervisor_node(state)
             intermediate = result.get("intermediate_results") or {}
             output = intermediate.get(supervisor_name, "")
@@ -80,6 +81,7 @@ class WorkflowEngine:
             if match:
                 raw = match.group(1).strip()
                 result["next_agent"] = "end" if raw.lower() == "end" else raw
+                logger.info(f"[Supervisor: {supervisor_name}] 路由决策: {result['next_agent']}")
                 cleaned = re.sub(
                     r'^NEXT_AGENT:\s*.+$\n?', '', output, flags=re.MULTILINE
                 ).strip()
@@ -87,6 +89,7 @@ class WorkflowEngine:
                     intermediate[supervisor_name] = cleaned
             else:
                 result["next_agent"] = "end"
+                logger.warning(f"[Supervisor: {supervisor_name}] 未找到 NEXT_AGENT 标记，结束工作流")
             return result
 
         graph.add_node("supervisor", supervisor_wrapper)

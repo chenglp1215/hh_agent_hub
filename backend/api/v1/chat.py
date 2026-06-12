@@ -168,7 +168,9 @@ async def _execute_chat(session: Session, message: str) -> dict:
             "error": None,
         }
 
+        logger.info(f"开始执行工作流: flow_type={workflow.flow_type}, workers={agent_names}")
         result = await graph.ainvoke(initial_state)
+        logger.info(f"工作流执行完成")
         final_answer = result.get("final_answer", "")
         if not final_answer:
             intermediate = result.get("intermediate_results", {})

@@ -38,6 +38,7 @@ class LLMManager:
             "model": model,
             "temperature": temperature,
             "max_tokens": max_tokens,
+            "request_timeout": 120,
         }
         if api_key:
             kwargs["openai_api_key"] = api_key

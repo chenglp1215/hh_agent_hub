@@ -93,9 +93,6 @@ async def update_workflow(workflow_id: int, body: WorkflowUpdate, user=Depends(g
     if not w:
         return error(code=404, message="工作流不存在")
 
-    if w.status == "published":
-        return error(code=400, message="已发布的工作流不可直接编辑，请先归档")
-
     # Non-JSON fields via setattr
     updatable = [
         "name", "description", "flow_type", "supervisor_agent_id",
@@ -155,6 +152,19 @@ async def publish_workflow(workflow_id: int, user=Depends(get_current_user)):
     w.status = "published"
     await w.save()
     return success(message="已发布")
+
+
+@router.post("/{workflow_id}/archive")
+async def archive_workflow(workflow_id: int, user=Depends(get_current_user)):
+    w = await Workflow.get_or_none(id=workflow_id)
+    if not w:
+        return error(code=404, message="工作流不存在")
+    if w.status == "draft":
+        return error(code=400, message="草稿状态无需归档")
+    w.status = "draft"
+    await w.save()
+    logger.info(f"Workflow archived (unpublished): {w.name} (id={w.id})")
+    return success(message="已归档（恢复为草稿）")
 
 
 @router.get("/{workflow_id}/graph")

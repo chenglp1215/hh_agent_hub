@@ -150,13 +150,14 @@
         <a-form-item label="显示名称">
           <a-input v-model:value="quickAgentDisplayName" placeholder="如 主管Agent" />
         </a-form-item>
-        <a-form-item label="模型">
-          <a-select v-model:value="quickAgentModel" placeholder="选择LLM模型">
-            <a-select-option value="gpt-4o-mini">GPT-4o-mini</a-select-option>
-            <a-select-option value="gpt-4o">GPT-4o</a-select-option>
-            <a-select-option value="claude-3-haiku">Claude Haiku</a-select-option>
-            <a-select-option value="claude-3-sonnet">Claude Sonnet</a-select-option>
-          </a-select>
+        <a-form-item label="LLM 配置" required>
+          <a-select
+            v-model:value="quickAgentLlmConfigId"
+            placeholder="选择 LLM 配置..."
+            :options="llmConfigOptions"
+            show-search
+            filter-option
+          />
         </a-form-item>
         <a-form-item label="系统提示">
           <a-textarea v-model:value="quickAgentPrompt" :rows="4" placeholder="你是一个工作流主管..." />
@@ -176,6 +177,7 @@ import { message } from 'ant-design-vue'
 import { PlusOutlined, ArrowUpOutlined, ArrowDownOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { workflowsApi } from '@/api/workflows'
 import { agentsApi } from '@/api/agents'
+import { llmConfigsApi } from '@/api/llmConfigs'
 
 const route = useRoute()
 const router = useRouter()
@@ -249,14 +251,13 @@ const showCreateSupervisor = ref(false)
 const creatingAgent = ref(false)
 const quickAgentName = ref('')
 const quickAgentDisplayName = ref('')
-const quickAgentModel = ref('gpt-4o-mini')
+const quickAgentLlmConfigId = ref<number | null>(null)
 const quickAgentPrompt = ref('')
+const llmConfigOptions = ref<{ value: number; label: string }[]>([])
 
 async function handleCreateSupervisor() {
-  if (!quickAgentName.value) {
-    message.warning('请输入名称')
-    return
-  }
+  if (!quickAgentName.value) { message.warning('请输入名称'); return }
+  if (!quickAgentLlmConfigId.value) { message.warning('请选择 LLM 配置'); return }
   creatingAgent.value = true
   try {
     const res = await agentsApi.create({
@@ -265,7 +266,8 @@ async function handleCreateSupervisor() {
       agent_type: 'local',
       role: 'supervisor',
       system_prompt: quickAgentPrompt.value,
-      llm_config: { provider: quickAgentModel.value.startsWith('claude') ? 'anthropic' : 'openai', model: quickAgentModel.value, temperature: 0.3 },
+      llm_config_id: quickAgentLlmConfigId.value,
+      llm_config: null,
     })
     supervisorAgentId.value = res.data.data.id
     showCreateSupervisor.value = false
@@ -317,7 +319,15 @@ async function handleSave() {
 }
 
 // --- 加载 ---
+async function loadLlmConfigOptions() {
+  try {
+    const res = await llmConfigsApi.list()
+    llmConfigOptions.value = (res.data.data || []).map((c: any) => ({ value: c.id, label: `${c.name} (${c.provider}/${c.model})` }))
+  } catch { /* ignore */ }
+}
+
 onMounted(async () => {
+  loadLlmConfigOptions()
   try {
     const res = await agentsApi.list({ status: 'active' })
     agents.value = res.data.data || []

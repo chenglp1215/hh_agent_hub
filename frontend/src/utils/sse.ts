@@ -2,12 +2,13 @@ export function createSSEConnection(
   url: string,
   body: any,
   onEvent: (event: string, data: any) => void,
+  extraHeaders?: Record<string, string>,
 ): AbortController {
   const controller = new AbortController()
 
   fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...extraHeaders },
     body: JSON.stringify(body),
     signal: controller.signal,
   })

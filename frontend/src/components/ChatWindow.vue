@@ -60,6 +60,8 @@ async function handleSend() {
 
   try {
     const { createSSEConnection } = await import('@/utils/sse')
+    const headers: Record<string, string> = {}
+    if (props.apiKey) headers['X-API-Key'] = props.apiKey
     createSSEConnection(
       '/api/v1/chat',
       { app_id: props.appId, message: text, stream: true },
@@ -98,6 +100,7 @@ async function handleSend() {
           streaming.value = false
         }
       },
+      headers,
     )
   } catch {
     streaming.value = false

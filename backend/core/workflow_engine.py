@@ -71,10 +71,22 @@ class WorkflowEngine:
         graph = StateGraph(AgentState)
 
         # Add supervisor node (wrapped to parse routing decision)
+        MAX_SUPERVISOR_ROUNDS = 5
+
         async def supervisor_wrapper(state: AgentState) -> dict:
-            logger.info(f"[Supervisor: {supervisor_name}] 开始调度决策")
+            intermediate = state.get("intermediate_results") or {}
+            rounds = intermediate.get("_supervisor_rounds", 0)
+            if rounds >= MAX_SUPERVISOR_ROUNDS:
+                logger.warning(
+                    f"[Supervisor: {supervisor_name}] 已达最大轮次 {MAX_SUPERVISOR_ROUNDS}，强制结束"
+                )
+                intermediate["_supervisor_rounds"] = rounds + 1
+                return {"next_agent": "end", "intermediate_results": intermediate}
+
+            logger.info(f"[Supervisor: {supervisor_name}] 第 {rounds + 1} 轮调度决策")
             result = await supervisor_node(state)
             intermediate = result.get("intermediate_results") or {}
+            intermediate["_supervisor_rounds"] = rounds + 1
             output = intermediate.get(supervisor_name, "")
 
             match = re.search(r'^NEXT_AGENT:\s*(.+)$', output, re.MULTILINE)
@@ -90,6 +102,7 @@ class WorkflowEngine:
             else:
                 result["next_agent"] = "end"
                 logger.warning(f"[Supervisor: {supervisor_name}] 未找到 NEXT_AGENT 标记，结束工作流")
+            result["intermediate_results"] = intermediate
             return result
 
         graph.add_node("supervisor", supervisor_wrapper)

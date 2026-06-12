@@ -74,9 +74,14 @@ class AgentNodeFactory:
                 f"你是工作流调度主管，负责将用户问题分派给合适的子代理。\n"
                 f"可用的子代理：\n{worker_list}\n\n"
                 f"请根据用户问题选择一个最合适的子代理来处理。\n"
-                f"在回复的最后，单独用一行标明你选择的代理名称，格式如下：\n"
-                f"NEXT_AGENT: <代理名称>\n\n"
-                f"如果你认为无需再调用任何子代理，请输出：\n"
+                f"调度规则：\n"
+                f"1. 首次收到用户问题时，选择一个最合适的子代理，输出 NEXT_AGENT: <名称>\n"
+                f"2. 当子代理返回结果后，检查结果是否已完整回答用户问题。"
+                f"如果已满足用户需求，必须输出 NEXT_AGENT: end\n"
+                f"3. 不要重复调用同一个子代理处理相同的问题\n\n"
+                f"在回复的最后，单独用一行标明路由决策，格式如下：\n"
+                f"NEXT_AGENT: <代理名称>\n"
+                f"或\n"
                 f"NEXT_AGENT: end"
             )
             full_prompt += routing_instruction
@@ -109,11 +114,11 @@ class AgentNodeFactory:
                     state_modifier=SystemMessage(content=injected_prompt),
                 )
                 result = await injected_agent.ainvoke({
-                    "messages": [{"role": "user", "content": user_input}],
+                    "messages": state.get("messages", []),
                 })
             else:
                 result = await react_agent.ainvoke({
-                    "messages": [{"role": "user", "content": user_input}],
+                    "messages": state.get("messages", []),
                 })
 
             # 提取最后一条消息的内容作为输出

@@ -113,31 +113,20 @@ async def update_workflow(workflow_id: int, body: WorkflowUpdate, user=Depends(g
     w.version += 1
     await w.save()
 
-    # JSON fields via direct UPDATE to bypass Tortoise dirty-tracking
-    from tortoise import connections
-    conn = connections.get("default")
-    import json as _json
+    # JSON fields via filter().update() to bypass Tortoise model dirty-tracking
+    json_updates = {}
     if body.worker_agent_ids is not None:
-        await conn.execute_query(
-            "UPDATE workflows SET worker_agent_ids = %s WHERE id = %s",
-            [_json.dumps(body.worker_agent_ids), workflow_id],
-        )
-        logger.info(f"Workflow {workflow_id} worker_agent_ids updated to {body.worker_agent_ids}")
+        json_updates["worker_agent_ids"] = body.worker_agent_ids
     if body.edges is not None:
-        await conn.execute_query(
-            "UPDATE workflows SET edges = %s WHERE id = %s",
-            [_json.dumps(body.edges), workflow_id],
-        )
+        json_updates["edges"] = body.edges
     if body.parallel_groups is not None:
-        await conn.execute_query(
-            "UPDATE workflows SET parallel_groups = %s WHERE id = %s",
-            [_json.dumps(body.parallel_groups), workflow_id],
-        )
+        json_updates["parallel_groups"] = body.parallel_groups
     if body.human_interrupts is not None:
-        await conn.execute_query(
-            "UPDATE workflows SET human_interrupts = %s WHERE id = %s",
-            [_json.dumps(body.human_interrupts), workflow_id],
-        )
+        json_updates["human_interrupts"] = body.human_interrupts
+
+    if json_updates:
+        await Workflow.filter(id=workflow_id).update(**json_updates)
+        logger.info(f"Workflow {workflow_id} JSON fields updated: {list(json_updates.keys())}")
 
     return success(message="更新成功")
 

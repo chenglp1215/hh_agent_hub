@@ -98,7 +98,7 @@ async def update_workflow(workflow_id: int, body: WorkflowUpdate, user=Depends(g
 
     updatable = [
         "name", "description", "flow_type", "supervisor_agent_id",
-        "worker_agent_ids", "edges", "parallel_groups", "human_interrupts",
+        "edges", "parallel_groups", "human_interrupts",
         "error_strategy", "agent_timeout_seconds", "workflow_timeout_seconds",
         "max_retries",
     ]
@@ -107,11 +107,19 @@ async def update_workflow(workflow_id: int, body: WorkflowUpdate, user=Depends(g
         if val is not None:
             setattr(w, field, val)
 
+    # worker_agent_ids explicitly — Tortoise JSONField needs explicit assignment
+    if body.worker_agent_ids is not None:
+        w.worker_agent_ids = body.worker_agent_ids
+        logger.info(f"Workflow update: worker_agent_ids = {body.worker_agent_ids}")
+
     if body.status is not None:
         w.status = body.status
 
     w.version += 1
     await w.save()
+    # Re-fetch to verify persistence
+    await w.refresh_from_db(fields=["worker_agent_ids"])
+    logger.info(f"Workflow saved, verified: worker_agent_ids = {w.worker_agent_ids}")
     return success(message="更新成功")
 
 

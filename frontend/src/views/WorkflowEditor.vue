@@ -92,14 +92,13 @@
         <a-card title="工作者 Agent" class="lg:col-span-2">
           <a-form-item label="选择工作者">
             <a-select
-              :value="workerIds"
+              v-model:value="workerIds"
               mode="multiple"
               placeholder="选择多个工作者 Agent..."
               :options="workerOptions"
               show-search
               filter-option
               class="w-full"
-              @update:value="(vals: number[]) => workerIds = vals"
             />
           </a-form-item>
           <div v-if="workerIds.length > 0" class="mt-4">

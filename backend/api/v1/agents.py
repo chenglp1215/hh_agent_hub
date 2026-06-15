@@ -71,6 +71,12 @@ async def get_agent(agent_id: int, user=Depends(get_current_user)):
 
 @router.post("")
 async def create_agent(body: AgentCreate, user=Depends(get_current_user)):
+    # Validate settings_json size for claudecode agents
+    if body.agent_type == "claudecode" and body.claudecode_config:
+        sj = body.claudecode_config.get("settings_json", "")
+        if len(sj) > 100000:
+            return error(code=400, message="settings_json 内容过长，最大支持 100KB")
+
     existing = await Agent.get_or_none(name=body.name)
     if existing:
         return error(code=400, message="Agent 名称已存在")
@@ -117,6 +123,11 @@ async def update_agent(agent_id: int, body: AgentUpdate, user=Depends(get_curren
     for field in updatable:
         val = getattr(body, field, None)
         if val is not None:
+            # Validate settings_json size for claudecode config
+            if field == "claudecode_config" and isinstance(val, dict) and val.get("settings_json", ""):
+                sj = val["settings_json"]
+                if len(sj) > 100000:
+                    return error(code=400, message="settings_json 内容过长，最大支持 100KB")
             setattr(a, field, val)
 
     if body.kb_ids is not None:
@@ -164,10 +175,42 @@ async def test_agent(agent_id: int, body: AgentTestRequest, user=Depends(get_cur
 
     try:
         from core.agent_factory import agent_factory
+        from models.knowledge_base import ContentBlock
 
         mcp_links = await AgentMcpLink.filter(agent_id=agent_id).prefetch_related("mcp_server")
         kb_links = await AgentKbLink.filter(agent_id=agent_id).prefetch_related("kb")
         skill_links = await AgentSkillLink.filter(agent_id=agent_id).prefetch_related("skill")
+
+        # Pre-resolve KB ContentBlock content
+        kb_content = []
+        if a.knowledge_base_ids:
+            blocks = await ContentBlock.filter(kb_id__in=a.knowledge_base_ids).order_by("source_file", "id")
+            for b in blocks:
+                kb_content.append({
+                    "heading_path": b.heading_path or b.source_file,
+                    "body": b.body,
+                    "source_file": b.source_file,
+                })
+
+        # Pre-resolve Skill content
+        skill_content = []
+        for sl in skill_links:
+            skill = sl.skill
+            skill_content.append({
+                "name": skill.name,
+                "description": skill.description,
+                "skill_type": skill.skill_type,
+                "content": skill.content,
+            })
+
+        mcp_servers = [{
+            "id": ml.mcp_server.id, "name": ml.mcp_server.name,
+            "base_url": ml.mcp_server.base_url,
+            "headers": ml.mcp_server.headers,
+            "single_endpoint": ml.mcp_server.single_endpoint,
+            "enabled_tools": ml.enabled_tools,
+            "enabled": ml.enabled,
+        } for ml in mcp_links]
 
         config = {
             "name": a.name, "agent_type": a.agent_type, "role": a.role,
@@ -175,19 +218,21 @@ async def test_agent(agent_id: int, body: AgentTestRequest, user=Depends(get_cur
             "http_config": a.http_config,
             "claudecode_config": a.claudecode_config,
             "system_prompt": a.system_prompt,
-            "mcp_servers": [{
-                "id": ml.mcp_server.id, "name": ml.mcp_server.name,
-                "base_url": ml.mcp_server.base_url,
-                "headers": ml.mcp_server.headers,
-                "single_endpoint": ml.mcp_server.single_endpoint,
-                "enabled_tools": ml.enabled_tools,
-                "enabled": ml.enabled,
-            } for ml in mcp_links],
+            "mcp_servers": mcp_servers,
             "knowledge_base_ids": a.knowledge_base_ids or [],
-            "skills": [{"name": sl.skill.name, "skill_type": sl.skill.skill_type, "content": sl.skill.content} for sl in skill_links],
+            "skills": skill_content,
         }
 
-        agent_node = await agent_factory.create(config)
+        if a.agent_type == "claudecode":
+            agent_node = await agent_factory.create_claudecode_agent(
+                config,
+                mcp_servers=mcp_servers,
+                kb_content=kb_content,
+                skill_content=skill_content,
+            )
+        else:
+            agent_node = await agent_factory.create(config)
+
         result = await agent_node({"user_input": body.message, "messages": [], "intermediate_results": {}})
         output = result.get("intermediate_results", {}).get(a.name, "")
         return success(data={"response": output})

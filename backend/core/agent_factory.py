@@ -417,19 +417,30 @@ class AgentNodeFactory:
 
         return agent_node
 
-    async def create_claudecode_agent(self, agent_config: Dict[str, Any]):
+    async def create_claudecode_agent(self, agent_config: Dict[str, Any],
+                                       mcp_servers: List[Dict] = None,
+                                       kb_content: List[Dict] = None,
+                                       skill_content: List[Dict] = None):
         """创建 claudecode 类型 Agent 的执行节点
 
-        将请求委托给 Claude Code CLI 运行器。
+        将请求委托给 Claude Code CLI 运行器，并传递已解析的资源上下文。
 
         Args:
             agent_config: Agent 配置字典，包含 claudecode_config 等字段
+            mcp_servers: 关联的 MCP Server 配置列表（含 base_url, headers 等）
+            kb_content: 关联知识库的 ContentBlock 列表（含 heading_path, body 等）
+            skill_content: 关联 Skill 的内容列表（含 name, content 等）
 
         Returns:
             异步函数，接收 state dict 并返回更新后的 state dict
         """
         from core.claude_code_runner import ClaudeCodeRunner
-        runner = ClaudeCodeRunner(agent_config.get("claudecode_config", {}))
+        runner = ClaudeCodeRunner(
+            config=agent_config.get("claudecode_config", {}),
+            mcp_servers=mcp_servers,
+            kb_content=kb_content,
+            skill_content=skill_content,
+        )
         agent_name = agent_config.get("name", "unknown")
 
         async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:

@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>/orchestration — Harness VibeCoding</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #0d0d0d;
+    color: #e4e4e4;
+    overflow-x: hidden;
+  }
+
+  .slide {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 80px 60px;
+    position: relative;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  /* ===== SLIDE 1: HERO ===== */
+  .hero {
+    background: radial-gradient(ellipse 80% 60% at 50% 40%, #1a1a2e 0%, #0d0d0d 70%);
+    text-align: center;
+  }
+  .hero .badge {
+    display: inline-block;
+    padding: 6px 20px;
+    border-radius: 100px;
+    background: rgba(94,106,210,0.15);
+    border: 1px solid rgba(94,106,210,0.3);
+    color: #8b94f0;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    margin-bottom: 32px;
+  }
+  .hero h1 {
+    font-size: clamp(48px, 8vw, 88px);
+    font-weight: 900;
+    letter-spacing: -2px;
+    line-height: 1.05;
+    margin-bottom: 20px;
+  }
+  .hero h1 .accent { color: #5e6ad2; }
+  .hero h1 .cmd {
+    font-family: 'Courier New', monospace;
+    background: rgba(94,106,210,0.12);
+    padding: 4px 20px;
+    border-radius: 12px;
+    font-size: 0.7em;
+  }
+  .hero .subtitle {
+    font-size: 20px;
+    color: #999;
+    font-weight: 400;
+    max-width: 700px;
+    margin: 0 auto 48px;
+    line-height: 1.6;
+  }
+  .hero .stat-row {
+    display: flex;
+    gap: 48px;
+    justify-content: center;
+  }
+  .hero .stat {
+    text-align: center;
+  }
+  .hero .stat .num {
+    font-size: 36px;
+    font-weight: 800;
+    color: #5e6ad2;
+    letter-spacing: -1px;
+  }
+  .hero .stat .label {
+    font-size: 13px;
+    color: #777;
+    margin-top: 4px;
+  }
+
+  /* ===== SLIDE 2: THE TEAM ===== */
+  .arch { background: #0d0d0d; }
+  .arch h2 {
+    font-size: 40px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin-bottom: 12px;
+  }
+  .arch h2 .accent { color: #5e6ad2; }
+  .arch .lead { color: #999; font-size: 15px; margin-bottom: 40px; max-width: 650px; text-align: center; line-height: 1.6; }
+  .arch-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    max-width: 1000px;
+    width: 100%;
+  }
+  .arch-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 28px;
+    transition: border-color 0.2s;
+  }
+  .arch-card:hover { border-color: rgba(94,106,210,0.35); }
+  .arch-card .icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+  .arch-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+  .arch-card p { font-size: 13px; color: #999; line-height: 1.5; }
+  .icon-purple { background: rgba(94,106,210,0.15); color: #8b94f0; }
+  .icon-green { background: rgba(46,204,113,0.15); color: #2ecc71; }
+  .icon-amber { background: rgba(241,196,15,0.15); color: #f1c40f; }
+  .icon-red { background: rgba(231,76,60,0.15); color: #e74c3c; }
+  .icon-cyan { background: rgba(26,188,156,0.15); color: #1abc9c; }
+  .icon-blue { background: rgba(52,152,219,0.15); color: #3498db; }
+
+  /* Flow diagram */
+  .flow-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 40px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .flow-node {
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .flow-arrow { color: #5e6ad2; font-size: 18px; font-weight: 700; }
+  .fn-orch { background: rgba(94,106,210,0.2); color: #8b94f0; }
+  .fn-plan { background: rgba(26,188,156,0.2); color: #1abc9c; }
+  .fn-dev { background: rgba(46,204,113,0.2); color: #2ecc71; }
+  .fn-verify { background: rgba(241,196,15,0.2); color: #f1c40f; }
+  .fn-test { background: rgba(231,76,60,0.2); color: #e74c3c; }
+  .fn-archive { background: rgba(52,152,219,0.2); color: #3498db; }
+
+  /* ===== SLIDE 3: DYNAMIC WORKFLOW ===== */
+  .dynamic { background: #0d0d0d; }
+  .dynamic h2 { font-size: 40px; font-weight: 800; letter-spacing: -1px; margin-bottom: 16px; }
+  .dynamic h2 .accent { color: #5e6ad2; }
+  .dynamic .lead { color: #999; font-size: 16px; margin-bottom: 48px; max-width: 700px; text-align: center; }
+
+  .mode-compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 24px;
+    max-width: 1100px;
+    width: 100%;
+  }
+  .mode-card {
+    border-radius: 16px;
+    padding: 32px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.02);
+    position: relative;
+    overflow: hidden;
+  }
+  .mode-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .mode-lite::before { background: linear-gradient(90deg, #2ecc71, #1abc9c); }
+  .mode-seq::before { background: linear-gradient(90deg, #3498db, #5e6ad2); }
+  .mode-sup::before { background: linear-gradient(90deg, #e74c3c, #f1c40f); }
+  .mode-card h3 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  .mode-card .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+  .tag-lite { background: rgba(46,204,113,0.15); color: #2ecc71; }
+  .tag-seq { background: rgba(94,106,210,0.15); color: #8b94f0; }
+  .tag-sup { background: rgba(241,196,15,0.15); color: #f1c40f; }
+  .mode-card ul { list-style: none; padding: 0; }
+  .mode-card li { font-size: 13px; color: #aaa; padding: 5px 0; padding-left: 16px; position: relative; }
+  .mode-card li::before {
+    content: '→'; position: absolute; left: 0; color: #5e6ad2;
+  }
+
+  /* Decision tree */
+  .decision-tree {
+    margin-top: 48px;
+    max-width: 750px;
+    width: 100%;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 20px 28px;
+  }
+  .decision-tree h3 { font-size: 14px; font-weight: 700; margin-bottom: 16px; color: #aaa; text-align: center; }
+  .dt-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-family: 'Courier New', monospace;
+    color: #888;
+    padding: 3px 0;
+    justify-content: center;
+  }
+  .dt-highlight { color: #5e6ad2; font-weight: 700; }
+
+  /* ===== SLIDE 4: FAST FIX + AUTO CICD ===== */
+  .cicd { background: #0d0d0d; }
+  .cicd h2 { font-size: 40px; font-weight: 800; letter-spacing: -1px; margin-bottom: 16px; }
+  .cicd h2 .accent { color: #5e6ad2; }
+  .cicd .lead { color: #999; font-size: 16px; margin-bottom: 48px; max-width: 720px; text-align: center; }
+
+  .cicd-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    max-width: 1100px;
+    width: 100%;
+  }
+  .cicd-card {
+    border-radius: 16px;
+    padding: 32px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.02);
+  }
+  .cicd-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+  .cicd-card p { font-size: 13px; color: #999; line-height: 1.6; margin-bottom: 16px; }
+  .cicd-card .flow-mini {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    font-size: 12px; font-weight: 600; margin-top: 12px;
+  }
+  .cicd-card .flow-mini .step { padding: 4px 10px; border-radius: 6px; }
+  .s-dev { background: rgba(46,204,113,0.15); color: #2ecc71; }
+  .s-audit { background: rgba(241,196,15,0.15); color: #f1c40f; }
+  .s-fix { background: rgba(231,76,60,0.15); color: #e74c3c; }
+  .s-retry { background: rgba(94,106,210,0.15); color: #8b94f0; }
+  .s-pass { background: rgba(26,188,156,0.15); color: #1abc9c; }
+  .s-archive { background: rgba(52,152,219,0.15); color: #3498db; }
+  .s-tag { background: rgba(255,255,255,0.05); color: #aaa; }
+
+  /* ===== SLIDE 5: ADVANTAGES ===== */
+  .advantages { background: #0d0d0d; }
+  .advantages h2 { font-size: 40px; font-weight: 800; letter-spacing: -1px; margin-bottom: 48px; }
+  .advantages h2 .accent { color: #5e6ad2; }
+
+  .adv-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    max-width: 1000px;
+    width: 100%;
+  }
+  .adv-item {
+    display: flex;
+    gap: 16px;
+    padding: 24px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .adv-item .num {
+    font-size: 28px;
+    font-weight: 900;
+    color: #5e6ad2;
+    line-height: 1;
+    min-width: 40px;
+  }
+  .adv-item h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .adv-item p { font-size: 12px; color: #999; line-height: 1.5; }
+
+  /* ===== SLIDE 6: CONTEXT CHAIN ===== */
+  .context { background: #0d0d0d; }
+  .context h2 { font-size: 40px; font-weight: 800; letter-spacing: -1px; margin-bottom: 16px; }
+  .context h2 .accent { color: #5e6ad2; }
+  .context .lead { color: #999; font-size: 16px; margin-bottom: 48px; max-width: 700px; text-align: center; }
+
+  .chain-diagram {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 900px;
+    width: 100%;
+  }
+  .chain-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .chain-label {
+    min-width: 90px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #5e6ad2;
+    text-align: right;
+  }
+  .chain-content {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .chain-tag {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #aaa;
+  }
+  .chain-arrow-down {
+    text-align: center;
+    color: #5e6ad2;
+    font-size: 14px;
+    padding: 2px 0;
+    margin-left: 105px;
+  }
+
+  .shared-truth {
+    margin-top: 40px;
+    background: rgba(94,106,210,0.06);
+    border: 1px solid rgba(94,106,210,0.2);
+    border-radius: 12px;
+    padding: 24px 36px;
+    max-width: 800px;
+    text-align: center;
+  }
+  .shared-truth h3 { font-size: 15px; font-weight: 700; margin-bottom: 8px; color: #8b94f0; }
+  .shared-truth p { font-size: 13px; color: #aaa; line-height: 1.6; }
+
+  /* ===== SLIDE 7: OUTRO ===== */
+  .outro {
+    background: radial-gradient(ellipse 80% 60% at 50% 40%, #1a1a2e 0%, #0d0d0d 70%);
+    text-align: center;
+  }
+  .outro h2 {
+    font-size: 48px;
+    font-weight: 900;
+    letter-spacing: -2px;
+    margin-bottom: 16px;
+  }
+  .outro h2 .accent { color: #5e6ad2; }
+  .outro .lead { color: #999; font-size: 18px; margin-bottom: 32px; }
+  .outro .stack {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 800px;
+  }
+  .outro .stack span {
+    padding: 6px 16px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 500;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #aaa;
+  }
+
+  /* Navigation */
+  .nav-dots {
+    position: fixed;
+    right: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 100;
+  }
+  .nav-dots a {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    transition: background 0.2s;
+  }
+  .nav-dots a:hover, .nav-dots a.active { background: #5e6ad2; }
+
+  @media (max-width: 768px) {
+    .slide { padding: 40px 20px; }
+    .arch-grid, .mode-compare, .cicd-grid, .adv-grid { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 36px; }
+    .hero .stat-row { gap: 24px; }
+    .flow-row { gap: 4px; }
+    .flow-node { padding: 6px 10px; font-size: 11px; }
+    .flow-arrow { font-size: 14px; }
+    .chain-label { min-width: 60px; font-size: 11px; }
+    .chain-arrow-down { margin-left: 75px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV DOTS -->
+<div class="nav-dots">
+  <a href="#s1" class="active"></a>
+  <a href="#s2"></a>
+  <a href="#s3"></a>
+  <a href="#s4"></a>
+  <a href="#s5"></a>
+  <a href="#s6"></a>
+  <a href="#s7"></a>
+</div>
+
+<!-- ====== SLIDE 1: HERO ====== -->
+<section class="slide hero" id="s1">
+  <div class="badge">Harness VibeCoding</div>
+  <h1><span class="cmd">/orchestration</span></h1>
+  <p class="subtitle">
+    一条命令启动全自动研发流水线 — 从模糊想法到归档验收<br>
+    多智能体协同、Spec 驱动、零确认推进、自动修复闭环
+  </p>
+  <div class="stat-row">
+    <div class="stat"><div class="num">1</div><div class="label">条命令</div></div>
+    <div class="stat"><div class="num">6</div><div class="label">个 Agent</div></div>
+    <div class="stat"><div class="num">3</div><div class="label">种调度模式</div></div>
+    <div class="stat"><div class="num">0</div><div class="label">人工介入</div></div>
+  </div>
+</section>
+
+<!-- ====== SLIDE 2: THE TEAM ====== -->
+<section class="slide arch" id="s2">
+  <h2>🎯 <span class="accent">Agent</span> 协同团队</h2>
+  <p class="lead">不是单打独斗 — 是一个有分工、有契约、有监督的虚拟研发团队</p>
+  <div class="arch-grid">
+    <div class="arch-card">
+      <div class="icon icon-purple">🎯</div>
+      <h3>Orchestrator 主调度器</h3>
+      <p>需求探索 + 模式选择 + 全局调度。根据任务复杂度自动选择轻量/顺序/监督者模式，全程无需人工确认</p>
+    </div>
+    <div class="arch-card">
+      <div class="icon icon-cyan">📋</div>
+      <h3>Planner 开发代表</h3>
+      <p>技术方案设计 → 任务拆解 → 产出共享契约文件。以契约文件为前后端+测试的共同基准，消除理解偏差</p>
+    </div>
+    <div class="arch-card">
+      <div class="icon icon-green">🔧</div>
+      <h3>Backend + Frontend Dev</h3>
+      <p>无依赖任务并行调度执行。各自读取同一份契约文件，确保后端字段名 ↔ 前端字段名精准对齐</p>
+    </div>
+    <div class="arch-card">
+      <div class="icon icon-amber">🔍</div>
+      <h3>Code Auditor 代码审计师</h3>
+      <p>编译检查 + 构建验证 + 引用完整性审计。发现错误直接通知对应开发 agent 修复，不等待全流程结束</p>
+    </div>
+    <div class="arch-card">
+      <div class="icon icon-red">🧪</div>
+      <h3>API Tester 接口测试</h3>
+      <p>契约验证 + 功能测试 + 异常测试。逐字段对比实际响应与契约定义，简单 Bug 直接修复并重跑</p>
+    </div>
+    <div class="arch-card">
+      <div class="icon icon-blue">📦</div>
+      <h3>Archiver 归档验收</h3>
+      <p>全流程通过后自动归档 Spec、Change、Tasks。完整可审计的开发轨迹，一次触发全程记录</p>
+    </div>
+  </div>
+
+  <div class="flow-row">
+    <span class="flow-node fn-orch">/orchestration</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-node fn-plan">Plan</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-node fn-dev">Dev (并行)</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-node fn-verify">Audit</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-node fn-test">Test</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-node fn-archive">Archive</span>
+  </div>
+</section>
+
+<!-- ====== SLIDE 3: DYNAMIC WORKFLOW ====== -->
+<section class="slide dynamic" id="s3">
+  <h2>⚡ Dynamic <span class="accent">Workflows</span></h2>
+  <p class="lead">不是固定死板的流水线 — Orchestrator 根据任务复杂度自动选择最优调度策略</p>
+
+  <div class="mode-compare">
+    <div class="mode-card mode-lite">
+      <h3>🚀 轻量模式</h3>
+      <span class="tag tag-lite">单模块小改动</span>
+      <ul>
+        <li>预估 &lt; 5 分钟</li>
+        <li>跳过 Plan + 审计 + 测试</li>
+        <li>直接调度 Dev agent</li>
+        <li>完成后简要汇报变更</li>
+        <li>零额外开销、最快响应</li>
+      </ul>
+    </div>
+    <div class="mode-card mode-seq">
+      <h3>📋 顺序流水线</h3>
+      <span class="tag tag-seq">需求明确</span>
+      <ul>
+        <li>需求清晰、≤ 2 个模块</li>
+        <li>固定 6 阶段全流程</li>
+        <li>前后端无依赖时并行</li>
+        <li>阶段间自动推进无确认</li>
+        <li>失败自动重试，最多 3 次</li>
+      </ul>
+    </div>
+    <div class="mode-card mode-sup">
+      <h3>🧠 监督者模式</h3>
+      <span class="tag tag-sup">复杂 / 多模块</span>
+      <ul>
+        <li>跨领域 / 不确定性强</li>
+        <li>动态任务图 + 实时调度</li>
+        <li>Agent 间可直接通信</li>
+        <li>增量验证 + 动态重规划</li>
+        <li>并行机会自动识别利用</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="decision-tree">
+    <h3>Orchestrator 模式选择决策树</h3>
+    <div class="dt-row">任务进入 → 预估复杂度分析</div>
+    <div class="dt-row">  ├── 单模块 + &lt;5min → <span class="dt-highlight">轻量模式</span></div>
+    <div class="dt-row">  ├── 需求明确 + ≤2模块 → <span class="dt-highlight">顺序模式</span></div>
+    <div class="dt-row">  └── 复杂/多模块/不确定 → <span class="dt-highlight">监督者模式</span></div>
+  </div>
+</section>
+
+<!-- ====== SLIDE 4: FAST FIX + AUTO CICD ====== -->
+<section class="slide cicd" id="s4">
+  <h2>🔄 Fast Fix + <span class="accent">Auto CI/CD</span></h2>
+  <p class="lead">云端友好：发现 → 修复 → 验证 → 归档，全程自动闭环</p>
+
+  <div class="cicd-grid">
+    <div class="cicd-card">
+      <h3><span>🩹</span> Fast Fix 自愈机制</h3>
+      <p>测试阶段发现字段不一致、接口偏差等简单问题时，测试 Agent 直接进入修复→重跑循环，不抛出阻塞。只有无法自动修复的复杂问题才记录到报告。</p>
+      <div class="flow-mini">
+        <span class="step s-tag">Test</span> <span class="step s-fix">发现 Bug</span> <span class="step s-retry">Auto Fix</span> <span class="step s-tag">Re-run</span> <span class="step s-pass">通过 ✓</span>
+      </div>
+    </div>
+    <div class="cicd-card">
+      <h3><span>🚦</span> 指数退避重试</h3>
+      <p>最大 3 次重试，每次间隔翻倍。验证失败自动返回 Dev agent 修复后重新审计。超过 3 次标记 FAILED，生成失败快照，支持 git checkout 紧急回滚。</p>
+      <div class="flow-mini">
+        <span class="step s-audit">Audit ✗</span> <span class="step s-retry">Retry 1/3</span> <span class="step s-dev">Dev Fix</span> <span class="step s-audit">Re-Audit</span> <span class="step s-pass">通过 ✓</span>
+      </div>
+    </div>
+    <div class="cicd-card">
+      <h3><span>📜</span> 契约即真理</h3>
+      <p>Planner 产出 API 契约文件作为 Shared Truth。Backend/Frontend/Test 三个 Agent 读同一份文件。字段不一致时 Test Agent 直接修复（通常是后端 to_dict() 遗漏更新）。</p>
+      <div class="flow-mini">
+        <span class="step s-tag">契约文件</span> <span class="step s-tag">逐字段对比</span> <span class="step s-fix">不一致?</span> <span class="step s-retry">直接修复</span>
+      </div>
+    </div>
+    <div class="cicd-card">
+      <h3><span>📦</span> 零确认归档</h3>
+      <p>全流程绿灯后自动执行归档：Spec 同步 → Change 归档 → Tasks 标记完成。从 /orchestration 到归档，一个命令、零次确认、完整日志。</p>
+      <div class="flow-mini">
+        <span class="step s-pass">全通过</span> <span class="step s-archive">Sync Specs</span> <span class="step s-archive">Archive Change</span> <span class="step s-pass">Done</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== SLIDE 5: ADVANTAGES ====== -->
+<section class="slide advantages" id="s5">
+  <h2>✨ 核心 <span class="accent">设计优势</span></h2>
+
+  <div class="adv-grid">
+    <div class="adv-item">
+      <div class="num">01</div>
+      <div>
+        <h3>Spec-Driven 全链路</h3>
+        <p>explore → propose → apply → archive。每个变更都有完整的设计文档、契约文件和任务追踪。需求→代码的映射可追溯。</p>
+      </div>
+    </div>
+    <div class="adv-item">
+      <div class="num">02</div>
+      <div>
+        <h3>Context Passing Chain</h3>
+        <p>探索结果 → 设计方案 → 契约文件 → 开发报告 → 测试报告。每个 Agent 拿到的是结构化上下文，不是模糊的需求描述。</p>
+      </div>
+    </div>
+    <div class="adv-item">
+      <div class="num">03</div>
+      <div>
+        <h3>Contract-First 工程化</h3>
+        <p>契约文件是 Backend / Frontend / Test 三个 Agent 的 Shared Truth。逐字段定义（字段名、类型、枚举值），消除各自理解的偏差。</p>
+      </div>
+    </div>
+    <div class="adv-item">
+      <div class="num">04</div>
+      <div>
+        <h3>Parallel Agent 并行调度</h3>
+        <p>无依赖任务自动并行。监督者模式动态识别并行机会。前后端同时开发、多子任务并发执行，最大化吞吐量。</p>
+      </div>
+    </div>
+    <div class="adv-item">
+      <div class="num">05</div>
+      <div>
+        <h3>Zero-Confirmation Flow</h3>
+        <p>全流程自动推进不询问。只在需求存在歧义、Agent 返回 NEEDS_CLARIFICATION、或重试 3 次失败时才与用户交互。其余时间静默高效。</p>
+      </div>
+    </div>
+    <div class="adv-item">
+      <div class="num">06</div>
+      <div>
+        <h3>Unified Process Logging</h3>
+        <p>所有 Agent 执行过程追加写入同一日志文件。时间戳 + Agent 名称 + 事件描述。完整的、可审计的、可回溯的执行轨迹。</p>
+      </div>
+    </div>
+    <div class="adv-item">
+      <div class="num">07</div>
+      <div>
+        <h3>Graceful Degradation</h3>
+        <p>失败不阻塞全流程。简单 Bug 自修复，复杂问题记录继续。DONE_WITH_CONCERNS 不阻塞归档。只有重试耗尽才标记 FAILED。</p>
+      </div>
+    </div>
+    <div class="adv-item">
+      <div class="num">08</div>
+      <div>
+        <h3>Retry & Rollback 安全网</h3>
+        <p>最大 3 次重试 + 指数退避。失败快照保存中间状态。紧急回滚 git checkout。Agent 之间可互相请求协助，不依赖主调度器单点决策。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== SLIDE 6: CONTEXT CHAIN ====== -->
+<section class="slide context" id="s6">
+  <h2>🔗 <span class="accent">Context</span> Passing Chain</h2>
+  <p class="lead">信息在各阶段间不丢失、不变形 — 每个 Agent 拿到的是精确的结构化上下文</p>
+
+  <div class="chain-diagram">
+    <div class="chain-row">
+      <div class="chain-label">Explore</div>
+      <div class="chain-content">
+        <span class="chain-tag">需求概述</span>
+        <span class="chain-tag">业务目标</span>
+        <span class="chain-tag">涉及模块</span>
+        <span class="chain-tag">约束条件</span>
+        <span class="chain-tag">调度建议</span>
+      </div>
+    </div>
+    <div class="chain-arrow-down">↓</div>
+    <div class="chain-row">
+      <div class="chain-label">Plan</div>
+      <div class="chain-content">
+        <span class="chain-tag">API 契约文件</span>
+        <span class="chain-tag">OpenSpec 设计</span>
+        <span class="chain-tag">实现计划</span>
+        <span class="chain-tag">任务拆解</span>
+        <span class="chain-tag">风险点</span>
+      </div>
+    </div>
+    <div class="chain-arrow-down">↓</div>
+    <div class="chain-row">
+      <div class="chain-label">Dev</div>
+      <div class="chain-content">
+        <span class="chain-tag">API 变更明细</span>
+        <span class="chain-tag">变更文件列表</span>
+        <span class="chain-tag">新增枚举值</span>
+        <span class="chain-tag">路由变更</span>
+        <span class="chain-tag">开发报告</span>
+      </div>
+    </div>
+    <div class="chain-arrow-down">↓</div>
+    <div class="chain-row">
+      <div class="chain-label">Test</div>
+      <div class="chain-content">
+        <span class="chain-tag">契约合规报告</span>
+        <span class="chain-tag">功能测试结果</span>
+        <span class="chain-tag">异常测试结果</span>
+        <span class="chain-tag">修复记录</span>
+        <span class="chain-tag">残留问题</span>
+      </div>
+    </div>
+    <div class="chain-arrow-down">↓</div>
+    <div class="chain-row">
+      <div class="chain-label">Archive</div>
+      <div class="chain-content">
+        <span class="chain-tag">Spec 同步</span>
+        <span class="chain-tag">Change 归档</span>
+        <span class="chain-tag">Tasks 完成</span>
+        <span class="chain-tag">日志归档</span>
+        <span class="chain-tag">可追溯闭环</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="shared-truth">
+    <h3>📐 Shared Truth — API 契约文件</h3>
+    <p>
+      每个接口定义一张字段映射表：后端字段名 ↔ 前端字段名 · 类型 · 枚举值 · 分页格式<br><br>
+      Backend 读契约 → to_dict() 字段名必须一致<br>
+      Frontend 读契约 → interface 属性名必须一致<br>
+      Test 读契约 → 逐字段对比实际响应与契约定义<br>
+      <strong style="color:#8b94f0;">三个 Agent 一份文件，消除理解偏差</strong>
+    </p>
+  </div>
+</section>
+
+<!-- ====== SLIDE 7: OUTRO ====== -->
+<section class="slide outro" id="s7">
+  <h2><span class="accent">/orchestration</span></h2>
+  <p class="lead">
+    一次命令触发 6 阶段全自动研发流水线<br>
+    <small style="color:#777;">多智能体协同 · Spec 驱动 · 零确认 · 自动修复 · 全链路归档</small>
+  </p>
+  <div class="stack">
+    <span>Spec-Driven</span>
+    <span>6 Agent Roles</span>
+    <span>3 Orchestration Modes</span>
+    <span>Contract-First</span>
+    <span>Parallel Execution</span>
+    <span>Fast Fix</span>
+    <span>Auto CI/CD</span>
+    <span>Graceful Degradation</span>
+    <span>Retry + Rollback</span>
+    <span>Unified Logging</span>
+    <span>Context Passing</span>
+    <span>Zero Confirmation</span>
+  </div>
+  <p style="margin-top:48px;color:#555;font-size:13px;">
+    Harness VibeCoding — 让 AI Agent 像一支真正的研发团队
+  </p>
+</section>
+
+<script>
+  const dots = document.querySelectorAll('.nav-dots a');
+  const slides = document.querySelectorAll('.slide');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const idx = Array.from(slides).indexOf(entry.target);
+        dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+      }
+    });
+  }, { threshold: 0.5 });
+  slides.forEach(s => observer.observe(s));
+
+  dots.forEach(dot => {
+    dot.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.querySelector(dot.getAttribute('href'));
+      target?.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+</script>
+
+</body>
+</html>

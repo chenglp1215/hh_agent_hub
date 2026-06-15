@@ -29,3 +29,6 @@ logs/
 
 # Data
 data/
+openspec
+outputs
+dev_env

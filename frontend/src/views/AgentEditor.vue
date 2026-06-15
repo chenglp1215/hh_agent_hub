@@ -137,42 +137,57 @@
         <!-- Claude Code Config -->
         <template v-if="form.agent_type === 'claudecode'">
           <h3 class="text-lg font-semibold mb-4 mt-4 text-[#5e6ad2]">Claude Code 配置</h3>
+
+          <!-- Quick settings (optional, overlay CLI args) -->
           <a-row :gutter="16">
-            <a-col :span="12">
-              <a-form-item label="模型">
-                <a-select v-model:value="ccConfig.model">
+            <a-col :span="8">
+              <a-form-item label="模型 (CLI --model)">
+                <a-select v-model:value="ccConfig.model" @change="syncCcToSettingsJson">
                   <a-select-option value="claude-sonnet-4-6">Claude Sonnet 4.6</a-select-option>
                   <a-select-option value="claude-opus-4-7">Claude Opus 4.7</a-select-option>
+                  <a-select-option value="claude-sonnet-4-20250514">Claude Sonnet 4 (20250514)</a-select-option>
                 </a-select>
               </a-form-item>
             </a-col>
-            <a-col :span="12">
-              <a-form-item label="最大轮次">
-                <a-input-number v-model:value="ccConfig.max_turns" :min="1" :max="100" class="w-full" />
+            <a-col :span="8">
+              <a-form-item label="最大轮次 (CLI --max-turns)">
+                <a-input-number v-model:value="ccConfig.max_turns" :min="1" :max="100" class="w-full" @change="syncCcToSettingsJson" />
+              </a-form-item>
+            </a-col>
+            <a-col :span="8">
+              <a-form-item label="权限模式 (CLI --permission-mode)">
+                <a-select v-model:value="ccConfig.permission_mode" @change="syncCcToSettingsJson">
+                  <a-select-option value="default">Default</a-select-option>
+                  <a-select-option value="acceptEdits">Accept Edits</a-select-option>
+                  <a-select-option value="bypassPermissions">Bypass Permissions</a-select-option>
+                  <a-select-option value="plan">Plan Only</a-select-option>
+                </a-select>
               </a-form-item>
             </a-col>
           </a-row>
           <a-form-item label="工作目录">
             <a-input v-model:value="ccConfig.work_dir" placeholder="/data/agent_workspaces/agent_1/" />
           </a-form-item>
-          <a-form-item label="权限模式">
-            <a-select v-model:value="ccConfig.permission_mode">
-              <a-select-option value="default">Default</a-select-option>
-              <a-select-option value="acceptEdits">Accept Edits</a-select-option>
-              <a-select-option value="bypassPermissions">Bypass Permissions</a-select-option>
-              <a-select-option value="plan">Plan Only</a-select-option>
-            </a-select>
+
+          <!-- Settings JSON textarea (primary config) -->
+          <a-form-item
+            label="settings.json (Claude Code 原生配置)"
+            :validate-status="settingsJsonStatus"
+            :help="settingsJsonError"
+          >
+            <a-textarea
+              v-model:value="ccConfig.settings_json"
+              :rows="12"
+              placeholder='{\n  "model": "claude-sonnet-4-6",\n  "permissions": {\n    "allow": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]\n  }\n}'
+              style="font-family: 'Courier New', monospace; font-size: 13px;"
+              @input="validateSettingsJson"
+            />
           </a-form-item>
-          <a-form-item label="工具白名单">
-            <a-checkbox-group v-model:value="ccConfig.allowed_tools">
-              <a-checkbox value="Read">Read</a-checkbox>
-              <a-checkbox value="Write">Write</a-checkbox>
-              <a-checkbox value="Edit">Edit</a-checkbox>
-              <a-checkbox value="Bash">Bash</a-checkbox>
-              <a-checkbox value="Grep">Grep</a-checkbox>
-              <a-checkbox value="Glob">Glob</a-checkbox>
-            </a-checkbox-group>
-          </a-form-item>
+          <p class="text-xs text-gray-500 -mt-3 mb-4">
+            settings.json 是 Claude Code 的原生配置文件，将写入 work_dir/.claude/settings.json。
+            上方快速设置字段（模型/轮次/权限）通过 CLI 参数透传，优先级高于 settings.json。
+            MCP Server 通过页面下方的资源选择器关联，运行时自动注入。
+          </p>
         </template>
 
         <!-- System Prompt -->
@@ -250,12 +265,38 @@ async function loadLlmConfigOptions() {
 }
 const httpConfigHeaders = ref('{}')
 const ccConfig = ref<any>({
+  settings_json: '',
   model: 'claude-sonnet-4-6',
   max_turns: 25,
   work_dir: '',
   permission_mode: 'acceptEdits',
-  allowed_tools: ['Read', 'Write', 'Edit', 'Bash', 'Grep', 'Glob'],
 })
+
+// JSON validation state
+const settingsJsonStatus = ref<'success' | 'error' | ''>('')
+const settingsJsonError = ref('')
+
+function validateSettingsJson() {
+  const val = ccConfig.value.settings_json
+  if (!val || !val.trim()) {
+    settingsJsonStatus.value = ''
+    settingsJsonError.value = ''
+    return
+  }
+  try {
+    JSON.parse(val)
+    settingsJsonStatus.value = 'success'
+    settingsJsonError.value = ''
+  } catch (e: any) {
+    settingsJsonStatus.value = 'error'
+    settingsJsonError.value = e.message || 'JSON 格式错误'
+  }
+}
+
+function syncCcToSettingsJson() {
+  /* Optional: sync simple fields into settings_json.
+     Currently not auto-syncing to preserve user's manual edits. */
+}
 const selectedMcpServers = ref<any[]>([])
 const selectedKbIds = ref<number[]>([])
 const selectedSkillIds = ref<number[]>([])
@@ -288,6 +329,8 @@ async function loadAgent() {
     }
     if (d.claudecode_config) {
       ccConfig.value = { ...ccConfig.value, ...d.claudecode_config }
+      // Validate the loaded json
+      validateSettingsJson()
     }
     selectedMcpServers.value = (d.mcp_links || []).map((l: any) => ({
       mcp_server_id: l.mcp_server?.id || l.mcp_server_id,
@@ -320,7 +363,13 @@ function buildFormData() {
     }
   }
   if (form.value.agent_type === 'claudecode') {
-    data.claudecode_config = ccConfig.value
+    data.claudecode_config = {
+      settings_json: ccConfig.value.settings_json,
+      model: ccConfig.value.model,
+      max_turns: ccConfig.value.max_turns,
+      work_dir: ccConfig.value.work_dir,
+      permission_mode: ccConfig.value.permission_mode,
+    }
   }
   data.mcp_links = selectedMcpServers.value.map((item: any) => ({
     mcp_server_id: item.mcp_server_id,

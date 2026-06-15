@@ -7,7 +7,7 @@ description: 从Agent会话中提炼经验并更新Agent配置，使其自进化
 
 满足任一条件即可调用 `/evolve-agents`：
 
-- Agent **反复犯同样的错误**（如 verifier 报错后 developer 修复后又犯）
+- Agent **反复犯同样的错误**（如代码审计师报错后开发 agent 修复后又犯）
 - 发现了**Agent 配置中未提及的隐藏前置条件或陷阱**
 - Agent **忽略了项目特有的规范**（如命名、格式、响应格式）
 - 用户明确纠正了 Agent 的行为（"不要这样"、"以后应该这样"）
@@ -122,7 +122,7 @@ ROI > 0 时值得更新。具体来说，必须同时满足：
 
 ### 示例 1：后端 Agent 忽略了项目统一响应格式
 
-**场景**：backend-developer 产出的 API 返回自定义格式，但项目规范要求统一的响应格式。
+**场景**：后端开发 产出的 API 返回自定义格式，但项目规范要求统一的响应格式。
 
 **进化操作**：
 
@@ -134,7 +134,7 @@ ROI > 0 时值得更新。具体来说，必须同时满足：
 
 ### 示例 2：前端 Agent 没检查权限
 
-**场景**：frontend-developer 新建的页面缺少权限检查，tester 发现后开发者修了两次。
+**场景**：前端开发 新建的页面缺少权限检查，整体测试 发现后开发者修了两次。
 
 **进化操作**：
 
@@ -146,17 +146,17 @@ ROI > 0 时值得更新。具体来说，必须同时满足：
 - ⚠易忘 所有业务页面必须检查权限，新建页面时不要遗漏
 ```
 
-### 示例 3：planner 输出格式与 developer 预期不匹配
+### 示例 3：开发代表 输出格式与开发 agent 预期不匹配
 
-**场景**：planner 输出的任务列表用 markdown 表格，但 developer 期望 JSON 格式的任务 ID 列表。
+**场景**：开发代表 输出的任务列表用 markdown 表格，但开发 agent 期望 JSON 格式的任务 ID 列表。
 
 **进化操作**：
 
-更新 `.claude/agents/planner.md` 的返回格式章节，在 tasks 字段中增加 `id` 和 `description`；同时更新 `.claude/agents/backend-developer.md` 和 `.claude/agents/frontend-developer.md` 的「工作流程」章节，明确说明如何从 planner 结果中提取任务列表。
+更新 `.claude/agents/planner.md` 的返回格式章节，在 tasks 字段中增加 `id` 和 `description`；同时更新 `.claude/agents/backend-developer.md` 和 `.claude/agents/frontend-developer.md` 的「工作流程」章节，明确说明如何从开发代表结果中提取任务列表。
 
-### 示例 4：verifier 发现 UI 组件库的隐蔽问题
+### 示例 4：代码审计师 发现 UI 组件库的隐蔽问题
 
-**场景**：verifier 的构建通过了，但前端 Agent 使用了某个 UI 组件的特定属性导致显示问题，tester 发现后才修复。
+**场景**：代码审计师 的构建通过了，但前端 Agent 使用了某个 UI 组件的特定属性导致显示问题，整体测试 发现后才修复。
 
 **进化操作**：
 

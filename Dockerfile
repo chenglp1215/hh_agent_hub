@@ -10,6 +10,7 @@ LABEL description="Multi-Agent Collaboration Platform Backend"
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libmariadb-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

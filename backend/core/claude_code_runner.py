@@ -113,18 +113,23 @@ class ClaudeCodeRunner:
             "max_turns": settings.max_turns,
         }
 
+        extra_settings = {}
         if settings.settings_json and settings.settings_json.strip():
             try:
                 extra_settings = json.loads(settings.settings_json)
-                if "model" in extra_settings:
-                    options_kwargs["model"] = extra_settings["model"]
-                elif settings.model:
-                    options_kwargs["model"] = settings.model
             except json.JSONDecodeError:
                 pass
-        else:
-            if settings.model:
-                options_kwargs["model"] = settings.model
+
+        if extra_settings.get("model"):
+            options_kwargs["model"] = extra_settings["model"]
+        elif settings.model:
+            options_kwargs["model"] = settings.model
+
+        env_vars = extra_settings.get("env", {})
+        if env_vars:
+            for k, v in env_vars.items():
+                os.environ[k] = v
+            logger.info(f"Loaded {len(env_vars)} env vars from settings_json")
 
         system_prompt_parts = []
         agent_system_prompt = context.get("system_prompt", "")

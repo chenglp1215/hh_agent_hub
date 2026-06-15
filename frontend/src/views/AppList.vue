@@ -33,10 +33,10 @@
     >
       <template v-if="selectedApp">
         <div class="mb-4">
-          <h4 class="text-base font-semibold mb-2">应用信息</h4>
-          <div class="text-sm text-gray-500">
+          <h4 class="text-base font-semibold mb-2 text-white">应用信息</h4>
+          <div class="text-sm" style="color: #c0c4cc">
             <span>名称：{{ selectedApp.name }}</span>
-            <span class="ml-6">API Key：<code class="bg-gray-100 px-1 rounded text-xs">{{ selectedApp.api_key }}</code></span>
+            <span class="ml-6">API Key：<code class="px-1 rounded text-xs" style="background: #1a1a1c; color: #5e6ad2">{{ selectedApp.api_key }}</code></span>
           </div>
         </div>
 

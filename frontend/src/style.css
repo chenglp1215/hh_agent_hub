@@ -152,6 +152,14 @@ body {
 .ant-steps-item-wait .ant-steps-item-icon { background: #1a1a1c !important; border-color: var(--color-border) !important; }
 .ant-steps-item-wait .ant-steps-item-icon > .ant-steps-icon { color: #8a8f98 !important; }
 
+/* ---- Descriptions ---- */
+.ant-descriptions-title { color: #e1e1e1 !important; }
+.ant-descriptions-item-label { color: #8a8f98 !important; background: #0d0d0f !important; }
+.ant-descriptions-item-content { color: #e1e1e1 !important; }
+.ant-descriptions-bordered .ant-descriptions-item-label,
+.ant-descriptions-bordered .ant-descriptions-item-content { border-color: var(--color-border) !important; }
+.ant-descriptions-bordered .ant-descriptions-view { border-color: var(--color-border) !important; }
+
 /* ---- Radio ---- */
 .ant-radio-wrapper { color: #e1e1e1 !important; }
 .ant-radio-inner { background: #1a1a1c !important; border-color: var(--color-border) !important; }

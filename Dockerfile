@@ -11,7 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libmariadb-dev \
     git \
-    && rm -rf /var/lib/apt/lists/*
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g @anthropic-ai/claude-code
 
 WORKDIR /app
 

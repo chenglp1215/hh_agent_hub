@@ -138,56 +138,28 @@
         <template v-if="form.agent_type === 'claudecode'">
           <h3 class="text-lg font-semibold mb-4 mt-4 text-[#5e6ad2]">Claude Code 配置</h3>
 
-          <!-- Quick settings (optional, overlay CLI args) -->
-          <a-row :gutter="16">
-            <a-col :span="8">
-              <a-form-item label="模型 (CLI --model)">
-                <a-select v-model:value="ccConfig.model" @change="syncCcToSettingsJson">
-                  <a-select-option value="claude-sonnet-4-6">Claude Sonnet 4.6</a-select-option>
-                  <a-select-option value="claude-opus-4-7">Claude Opus 4.7</a-select-option>
-                  <a-select-option value="claude-sonnet-4-20250514">Claude Sonnet 4 (20250514)</a-select-option>
-                </a-select>
-              </a-form-item>
-            </a-col>
-            <a-col :span="8">
-              <a-form-item label="最大轮次 (CLI --max-turns)">
-                <a-input-number v-model:value="ccConfig.max_turns" :min="1" :max="100" class="w-full" @change="syncCcToSettingsJson" />
-              </a-form-item>
-            </a-col>
-            <a-col :span="8">
-              <a-form-item label="权限模式 (CLI --permission-mode)">
-                <a-select v-model:value="ccConfig.permission_mode" @change="syncCcToSettingsJson">
-                  <a-select-option value="default">Default</a-select-option>
-                  <a-select-option value="acceptEdits">Accept Edits</a-select-option>
-                  <a-select-option value="bypassPermissions">Bypass Permissions</a-select-option>
-                  <a-select-option value="plan">Plan Only</a-select-option>
-                </a-select>
-              </a-form-item>
-            </a-col>
-          </a-row>
-          <a-form-item label="工作目录">
-            <a-input v-model:value="ccConfig.work_dir" placeholder="/data/agent_workspaces/agent_1/" />
-          </a-form-item>
-
-          <!-- Settings JSON textarea (primary config) -->
-          <a-form-item
-            label="settings.json (Claude Code 原生配置)"
-            :validate-status="settingsJsonStatus"
-            :help="settingsJsonError"
-          >
-            <a-textarea
-              v-model:value="ccConfig.settings_json"
-              :rows="12"
-              placeholder='{\n  "model": "claude-sonnet-4-6",\n  "permissions": {\n    "allow": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]\n  }\n}'
-              style="font-family: 'Courier New', monospace; font-size: 13px;"
-              @input="validateSettingsJson"
+          <a-form-item label="关联项目">
+            <a-select
+              v-model:value="ccConfig.project_registry_id"
+              placeholder="选择项目..."
+              :options="projectOptions"
+              show-search
+              filter-option
+              allow-clear
+              :loading="loadingProjects"
             />
           </a-form-item>
-          <p class="text-xs text-gray-500 -mt-3 mb-4">
-            settings.json 是 Claude Code 的原生配置文件，将写入 work_dir/.claude/settings.json。
-            上方快速设置字段（模型/轮次/权限）通过 CLI 参数透传，优先级高于 settings.json。
-            MCP Server 通过页面下方的资源选择器关联，运行时自动注入。
-          </p>
+          <a-form-item label="关联 Settings">
+            <a-select
+              v-model:value="ccConfig.settings_registry_id"
+              placeholder="选择 Claude Settings..."
+              :options="settingsOptions"
+              show-search
+              filter-option
+              allow-clear
+              :loading="loadingSettings"
+            />
+          </a-form-item>
         </template>
 
         <!-- System Prompt -->
@@ -219,6 +191,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { agentsApi } from '@/api/agents'
+import { projectsApi } from '@/api/projects'
+import { claudeSettingsApi } from '@/api/claudeSettings'
 import McpServerSelector from '@/components/McpServerSelector.vue'
 import KnowledgeBaseSelector from '@/components/KnowledgeBaseSelector.vue'
 import SkillsSelector from '@/components/SkillsSelector.vue'
@@ -265,37 +239,39 @@ async function loadLlmConfigOptions() {
 }
 const httpConfigHeaders = ref('{}')
 const ccConfig = ref<any>({
-  settings_json: '',
-  model: 'claude-sonnet-4-6',
-  max_turns: 25,
-  work_dir: '',
-  permission_mode: 'acceptEdits',
+  project_registry_id: undefined,
+  settings_registry_id: undefined,
 })
 
-// JSON validation state
-const settingsJsonStatus = ref<'success' | 'error' | ''>('')
-const settingsJsonError = ref('')
+const loadingProjects = ref(false)
+const projectOptions = ref<{ value: number; label: string }[]>([])
+const loadingSettings = ref(false)
+const settingsOptions = ref<{ value: number; label: string }[]>([])
 
-function validateSettingsJson() {
-  const val = ccConfig.value.settings_json
-  if (!val || !val.trim()) {
-    settingsJsonStatus.value = ''
-    settingsJsonError.value = ''
-    return
-  }
+async function loadProjectOptions() {
+  loadingProjects.value = true
   try {
-    JSON.parse(val)
-    settingsJsonStatus.value = 'success'
-    settingsJsonError.value = ''
-  } catch (e: any) {
-    settingsJsonStatus.value = 'error'
-    settingsJsonError.value = e.message || 'JSON 格式错误'
+    const res = await projectsApi.list()
+    const list = res.data.data || []
+    projectOptions.value = list.map((p: any) => ({ value: p.id, label: `${p.display_name || p.name} (${p.git_repo_url})` }))
+  } catch {
+    // ignore
+  } finally {
+    loadingProjects.value = false
   }
 }
 
-function syncCcToSettingsJson() {
-  /* Optional: sync simple fields into settings_json.
-     Currently not auto-syncing to preserve user's manual edits. */
+async function loadSettingsOptions() {
+  loadingSettings.value = true
+  try {
+    const res = await claudeSettingsApi.list()
+    const list = res.data.data || []
+    settingsOptions.value = list.map((s: any) => ({ value: s.id, label: `${s.display_name || s.name} (${s.model})` }))
+  } catch {
+    // ignore
+  } finally {
+    loadingSettings.value = false
+  }
 }
 const selectedMcpServers = ref<any[]>([])
 const selectedKbIds = ref<number[]>([])
@@ -328,9 +304,15 @@ async function loadAgent() {
       httpConfigHeaders.value = JSON.stringify(d.http_config.headers || {}, null, 2)
     }
     if (d.claudecode_config) {
-      ccConfig.value = { ...ccConfig.value, ...d.claudecode_config }
-      // Validate the loaded json
-      validateSettingsJson()
+      // Support both old and new claudecode_config format
+      if (d.claudecode_config.project_registry_id !== undefined) {
+        ccConfig.value.project_registry_id = d.claudecode_config.project_registry_id
+        ccConfig.value.settings_registry_id = d.claudecode_config.settings_registry_id
+      } else {
+        // Old format — ignore inline fields, leave selectors empty
+        ccConfig.value.project_registry_id = undefined
+        ccConfig.value.settings_registry_id = undefined
+      }
     }
     selectedMcpServers.value = (d.mcp_links || []).map((l: any) => ({
       mcp_server_id: l.mcp_server?.id || l.mcp_server_id,
@@ -364,11 +346,8 @@ function buildFormData() {
   }
   if (form.value.agent_type === 'claudecode') {
     data.claudecode_config = {
-      settings_json: ccConfig.value.settings_json,
-      model: ccConfig.value.model,
-      max_turns: ccConfig.value.max_turns,
-      work_dir: ccConfig.value.work_dir,
-      permission_mode: ccConfig.value.permission_mode,
+      project_registry_id: ccConfig.value.project_registry_id || undefined,
+      settings_registry_id: ccConfig.value.settings_registry_id || undefined,
     }
   }
   data.mcp_links = selectedMcpServers.value.map((item: any) => ({
@@ -405,6 +384,8 @@ async function handleSubmit() {
 
 onMounted(() => {
   loadLlmConfigOptions()
+  loadProjectOptions()
+  loadSettingsOptions()
   if (isEdit.value) {
     loadAgent()
   }

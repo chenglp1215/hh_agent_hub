@@ -35,6 +35,14 @@ const router = createRouter({
         { path: 'resources/skills', name: 'SkillList', component: () => import('@/views/SkillList.vue'), meta: { title: 'Skill 管理' } },
         { path: 'resources/skills/create', name: 'SkillCreate', component: () => import('@/views/SkillEditor.vue'), meta: { title: '创建 Skill' } },
         { path: 'resources/skills/:id/edit', name: 'SkillEdit', component: () => import('@/views/SkillEditor.vue'), meta: { title: '编辑 Skill' }, props: true },
+        // Project Registry
+        { path: 'projects', name: 'ProjectList', component: () => import('@/views/ProjectList.vue'), meta: { title: '项目管理' } },
+        { path: 'projects/create', name: 'ProjectCreate', component: () => import('@/views/ProjectEditor.vue'), meta: { title: '新建项目' } },
+        { path: 'projects/:id/edit', name: 'ProjectEdit', component: () => import('@/views/ProjectEditor.vue'), meta: { title: '编辑项目' }, props: true },
+        // Claude Settings
+        { path: 'claude-settings', name: 'ClaudeSettingsList', component: () => import('@/views/ClaudeSettingsList.vue'), meta: { title: 'Claude Settings' } },
+        { path: 'claude-settings/create', name: 'ClaudeSettingsCreate', component: () => import('@/views/ClaudeSettingsEditor.vue'), meta: { title: '新建 Claude Settings' } },
+        { path: 'claude-settings/:id/edit', name: 'ClaudeSettingsEdit', component: () => import('@/views/ClaudeSettingsEditor.vue'), meta: { title: '编辑 Claude Settings' }, props: true },
         // Monitoring
         { path: 'monitor/traces', name: 'ExecutionTraceList', component: () => import('@/views/ExecutionTraceList.vue'), meta: { title: '执行追踪' } },
         { path: 'monitor/traces/:executionId', name: 'ExecutionTraceDetail', component: () => import('@/views/ExecutionTrace.vue'), meta: { title: '追踪详情' }, props: true },

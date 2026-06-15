@@ -41,6 +41,8 @@
         <a-menu-item key="/resources/mcp-servers">MCP Server 管理</a-menu-item>
         <a-menu-item key="/resources/knowledge-bases">知识库管理</a-menu-item>
         <a-menu-item key="/resources/skills">Skill 管理</a-menu-item>
+        <a-menu-item key="/projects">项目管理</a-menu-item>
+        <a-menu-item key="/claude-settings">Claude Settings</a-menu-item>
       </a-sub-menu>
 
       <a-sub-menu key="monitor">

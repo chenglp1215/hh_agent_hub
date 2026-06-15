@@ -60,6 +60,8 @@ TORTOISE_ORM = {
                 "models.mcp_server",
                 "models.knowledge_base",
                 "models.skill",
+                "models.project_registry",
+                "models.claude_settings",
                 "models.workflow_trace",
             ],
             "default_connection": "default",

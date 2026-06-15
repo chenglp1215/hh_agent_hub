@@ -1,6 +1,8 @@
 from .agent import Agent
 from .mcp_server import McpServerRegistry, AgentMcpLink
 from .knowledge_base import KnowledgeBase, AgentKbLink, ContentBlock
+from .project_registry import ProjectRegistry, AgentProjectLink
+from .claude_settings import ClaudeSettingsRegistry, AgentSettingsLink
 from .skill import SkillRegistry, AgentSkillLink
 from .sys_config import SysConfig
 from .user import User
@@ -19,6 +21,10 @@ __all__ = [
     "ContentBlock",
     "SkillRegistry",
     "AgentSkillLink",
+    "ProjectRegistry",
+    "AgentProjectLink",
+    "ClaudeSettingsRegistry",
+    "AgentSettingsLink",
     "SysConfig",
     "User",
     "Workflow",

@@ -440,6 +440,7 @@ class AgentNodeFactory:
             mcp_servers=mcp_servers,
             kb_content=kb_content,
             skill_content=skill_content,
+            agent_name=agent_config.get("name", "unknown"),
         )
         agent_name = agent_config.get("name", "unknown")
 
@@ -468,7 +469,12 @@ class AgentNodeFactory:
         elif agent_type == "http":
             return await self.create_http_agent(agent_config)
         elif agent_type == "claudecode":
-            return await self.create_claudecode_agent(agent_config)
+            return await self.create_claudecode_agent(
+                agent_config,
+                mcp_servers=agent_config.get("mcp_servers", []),
+                kb_content=agent_config.get("kb_content", []),
+                skill_content=agent_config.get("skills", []),
+            )
         else:
             raise ValueError(f"Unsupported agent type: {agent_type}")
 

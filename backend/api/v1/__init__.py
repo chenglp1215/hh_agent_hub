@@ -21,6 +21,14 @@ from api.v1.skills import router as skills_router
 router.include_router(skills_router)
 
 
+from api.v1.projects import router as projects_router
+router.include_router(projects_router)
+
+
+from api.v1.claude_settings import router as claude_settings_router
+router.include_router(claude_settings_router)
+
+
 from api.v1.knowledge_bases import router as kb_router
 router.include_router(kb_router)
 

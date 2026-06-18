@@ -89,6 +89,27 @@ class WorkflowEngine:
 
             logger.info(f"[Supervisor: {supervisor_name}] 第 {rounds + 1} 轮调度决策")
             trace.append({"type": "supervisor_start", "round": rounds + 1})
+
+            # 问候语快速短路：第一轮且用户输入是简单问候，直接返回，不调用 LLM
+            if rounds == 0:
+                GREETING_PATTERNS = (
+                    r'^(你好|您好|嗨|hi|hello|hey|在吗|在不在|早上好|下午好|晚上好|'
+                    r'good morning|good afternoon|good evening|'
+                    r'嗯|哦|好的|谢谢|多谢|感谢|ok|okay)$'
+                )
+                user_input = state.get("user_input", "").strip()
+                if re.match(GREETING_PATTERNS, user_input, re.IGNORECASE):
+                    greeting_reply = f"你好！我是 {supervisor_name}，有什么可以帮你的吗？"
+                    logger.info(f"[Supervisor: {supervisor_name}] 问候语检测，直接回复，不路由到子代理")
+                    trace.append({"type": "supervisor_greeting_shortcut", "round": 1})
+                    intermediate["_supervisor_rounds"] = 1
+                    return {
+                        "next_agent": "end",
+                        "final_answer": greeting_reply,
+                        "intermediate_results": intermediate,
+                        "trace": trace,
+                    }
+
             result = await supervisor_node(state)
             trace = result.get("trace") or trace
             intermediate = result.get("intermediate_results") or {}

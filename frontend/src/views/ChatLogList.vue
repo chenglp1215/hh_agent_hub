@@ -87,62 +87,6 @@
     </a-table>
 
     <!-- 详情抽屉 -->
-    <a-drawer
-      v-model:open="drawerOpen"
-      :title="'对话详情 #' + detailId"
-      placement="right"
-      width="640"
-    >
-      <template v-if="detail">
-        <div class="space-y-4">
-          <div>
-            <h3 class="text-sm font-semibold text-gray-400 mb-1">用户问题</h3>
-            <div class="bg-gray-900 rounded-lg p-3 text-sm whitespace-pre-wrap">{{ detail.user_input }}</div>
-          </div>
-          <div>
-            <h3 class="text-sm font-semibold text-gray-400 mb-1">回复内容</h3>
-            <div class="bg-gray-900 rounded-lg p-3 text-sm whitespace-pre-wrap">{{ detail.final_answer || '(无)' }}</div>
-          </div>
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <span class="text-xs text-gray-500">耗时</span>
-              <div class="text-sm font-mono">{{ formatDuration(detail.duration_ms) }}</div>
-            </div>
-            <div>
-              <span class="text-xs text-gray-500">Agent 数</span>
-              <div class="text-sm">{{ detail.agent_count }}</div>
-            </div>
-            <div>
-              <span class="text-xs text-gray-500">状态</span>
-              <a-tag :color="detail.status === 'success' ? 'green' : 'red'">
-                {{ detail.status === 'success' ? '成功' : '失败' }}
-              </a-tag>
-            </div>
-            <div>
-              <span class="text-xs text-gray-500">时间</span>
-              <div class="text-sm">{{ formatTime(detail.created_at) }}</div>
-            </div>
-          </div>
-          <div v-if="detail.error_message">
-            <h3 class="text-sm font-semibold text-red-400 mb-1">错误信息</h3>
-            <div class="bg-red-900/30 rounded-lg p-3 text-sm text-red-300">{{ detail.error_message }}</div>
-          </div>
-          <div v-if="detail.trace_summary && detail.trace_summary.length">
-            <h3 class="text-sm font-semibold text-gray-400 mb-1">执行追踪</h3>
-            <div class="bg-gray-900 rounded-lg p-3 space-y-1">
-              <div v-for="(evt, i) in detail.trace_summary" :key="i"
-                   class="flex items-center gap-2 text-xs font-mono py-0.5">
-                <span class="text-gray-500 w-4">#{{ i + 1 }}</span>
-                <a-tag :color="traceTagColor(evt.type)" class="!text-xs !px-1.5 !py-0 !min-w-0 !leading-5">
-                  {{ traceTagLabel(evt.type) }}
-                </a-tag>
-                <span class="text-gray-300">{{ traceEventText(evt) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </template>
-    </a-drawer>
   </div>
 </template>
 
@@ -179,11 +123,6 @@ const statusFilter = ref('')
 const appIdFilter = ref<number | undefined>(undefined)
 const apps = ref<any[]>([])
 
-// Drawer detail
-const drawerOpen = ref(false)
-const detailId = ref(0)
-const detail = ref<ChatLogItem | null>(null)
-
 const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
   { title: '用户问题', key: 'user_input', width: 200, ellipsis: true },
@@ -212,15 +151,26 @@ function formatTime(t: string | null): string {
 // 展开行显示简要追踪
 function expandedRowRender(record: ChatLogItem) {
   const trace = record.trace_summary || []
-  return trace.length
-    ? trace.map((evt: any, i: number) =>
-        `<div class="flex items-center gap-2 text-xs font-mono py-0.5">
-          <span class="text-gray-500 w-4">#${i + 1}</span>
-          <span class="${traceTagClass(evt.type)} px-1.5 py-0.5 rounded text-xs">${traceTagLabel(evt.type)}</span>
-          <span class="text-gray-300">${traceEventText(evt)}</span>
-        </div>`
-      ).join('')
-    : '<span class="text-gray-500 text-xs">无追踪信息</span>'
+  if (!trace.length) return '<span class="text-gray-500 text-xs">无追踪信息</span>'
+
+  const colorMap: Record<string, string> = {
+    supervisor_start: '#3b82f6',
+    supervisor_route: '#8b5cf6',
+    supervisor_end: '#6b7280',
+    supervisor_greeting_shortcut: '#10b981',
+    supervisor_force_end: '#ef4444',
+    agent_start: '#06b6d4',
+    agent_end: '#6366f1',
+  }
+
+  return trace.map((evt: any, i: number) => {
+    const bg = colorMap[evt.type] || '#6b7280'
+    return `<div class="flex items-center gap-2 text-xs font-mono py-0.5">
+      <span class="text-gray-500 w-4">#${i + 1}</span>
+      <span style="background:${bg}22;color:${bg};border:1px solid ${bg}44" class="px-1.5 py-0.5 rounded text-xs leading-5">${traceTagLabel(evt.type)}</span>
+      <span class="text-gray-300">${traceEventText(evt)}</span>
+    </div>`
+  }).join('')
 }
 
 function traceTagColor(type: string): string {
@@ -249,18 +199,6 @@ function traceTagLabel(type: string): string {
 }
 
 function traceTagClass(type: string): string {
-  const colors: Record<string, string> = {
-    supervisor_start: 'bg-blue-500/20 text-blue-300',
-    supervisor_route: 'bg-purple-500/20 text-purple-300',
-    supervisor_end: 'bg-gray-500/20 text-gray-400',
-    supervisor_greeting_shortcut: 'bg-green-500/20 text-green-300',
-    supervisor_force_end: 'bg-red-500/20 text-red-300',
-    agent_start: 'bg-cyan-500/20 text-cyan-300',
-    agent_end: 'bg-geekblue-500/20 text-geekblue-300',
-  }
-  return colors[type] || 'bg-gray-500/20 text-gray-400'
-}
-
 function traceEventText(evt: any): string {
   if (evt.type === 'supervisor_route') return `→ ${evt.target || 'end'}`
   if (evt.type === 'supervisor_start') return `第 ${evt.round} 轮调度`
@@ -271,18 +209,6 @@ function traceEventText(evt: any): string {
   if (evt.type === 'agent_result') return `${evt.agent} 输出`
   if (evt.type === 'agent_call') return `调用 ${evt.agent}`
   return JSON.stringify(evt)
-}
-
-// 打开抽屉查看详情
-async function openDetail(id: number) {
-  detailId.value = id
-  drawerOpen.value = true
-  try {
-    const res = await chatLogsApi.get(id)
-    detail.value = res.data.data || null
-  } catch {
-    detail.value = null
-  }
 }
 
 async function fetchList() {

@@ -4,6 +4,8 @@ from typing import Dict, Any, List, Optional
 
 from loguru import logger
 
+from core.session_manager import session_manager
+
 
 class ClaudeCodeRunner:
     """Claude Code executor supporting two modes:
@@ -13,18 +15,25 @@ class ClaudeCodeRunner:
 
     2. Legacy mode (inline config): Uses config fields like settings_json, model, work_dir directly.
        Falls back to CLI subprocess for backward compatibility.
+
+    Workspace layout (new mode):
+      {session_workspace}/
+        projects/{project_name}/code/    ← 按项目名组织的代码（同 session 多 agent 共享）
+        agents/{agent_name}/             ← 当前 agent 工作区（cwd + CLAUDE.md）
     """
 
     def __init__(self, config: Dict[str, Any] = None,
                  mcp_servers: List[Dict] = None,
                  kb_content: List[Dict] = None,
                  skill_content: List[Dict] = None,
-                 agent_name: str = "unknown"):
+                 agent_name: str = "unknown",
+                 system_prompt: str = ""):
         self.config = config or {}
         self.mcp_servers = mcp_servers or []
         self.kb_content = kb_content or []
         self.skill_content = skill_content or []
         self.agent_name = agent_name
+        self.system_prompt = system_prompt
 
     async def invoke(self, user_input: str, session_id: str,
                      context: Dict[str, Any] = None) -> str:
@@ -33,7 +42,8 @@ class ClaudeCodeRunner:
         Args:
             user_input: Task description from the user
             session_id: Session identifier
-            context: Additional context including system_prompt, intermediate_results
+            context: Additional context including system_prompt, intermediate_results,
+                     session_workspace
 
         Returns:
             Claude Code execution result text
@@ -49,6 +59,10 @@ class ClaudeCodeRunner:
             return await self._invoke_with_registries(user_input, session_id, context)
         else:
             return await self._invoke_legacy(user_input, session_id, context)
+
+    # ------------------------------------------------------------------
+    # New mode: project_registry + settings_registry
+    # ------------------------------------------------------------------
 
     async def _invoke_with_registries(self, user_input: str, session_id: str,
                                        context: Dict[str, Any]) -> str:
@@ -70,19 +84,30 @@ class ClaudeCodeRunner:
             logger.error(f"ClaudeSettingsRegistry id={settings_registry_id} not found for agent {self.agent_name}")
             return f"Error: Claude settings not found (id={settings_registry_id})"
 
-        try:
-            from core.git_ops import clone_or_pull_repo
-            clone_or_pull_repo(project)
-        except Exception as e:
-            logger.error(f"Git clone failed for project {project.name}: {e}")
-            return f"Error: Git clone failed - {e}"
+        # --- Derive paths from session workspace ---
+        session_workspace = (context or {}).get("session_workspace", "")
+        if not session_workspace:
+            logger.warning(f"No session_workspace in context, falling back to legacy workspace path")
+            from core.git_ops import get_workspace_path
+            workspace_dir = str(get_workspace_path(project))
+            self._write_claude_md(workspace_dir, context, project.system_prompt)
+            return await self._run_fallback(workspace_dir, user_input, settings, project, context)
 
-        workspace_dir = str(await self._get_workspace_dir(project))
-        self._write_claude_md(workspace_dir, context, project.system_prompt)
+        project_code_path = session_manager.get_project_code_path(session_id, project.name)
+        agent_workspace = session_manager.ensure_agent_workspace(session_id, self.agent_name)
+
+        # --- Ensure code exists (skip git if already there) ---
+        from core.git_ops import ensure_code_exists
+        force_pull = self._needs_code_pull(context)
+        ensure_code_exists(project, project_code_path, force_pull=force_pull)
+
+        # --- Write CLAUDE.md to agent workspace, referencing project code ---
+        self._write_claude_md(agent_workspace, context, project.system_prompt,
+                              project_code_path=project_code_path)
 
         try:
             return await self._run_sdk(
-                workspace_dir=workspace_dir,
+                workspace_dir=agent_workspace,
                 user_input=user_input,
                 settings=settings,
                 project=project,
@@ -90,14 +115,28 @@ class ClaudeCodeRunner:
             )
         except ImportError:
             logger.warning("claude-code-sdk not installed, falling back to legacy CLI")
-            return await self._run_cli_legacy(workspace_dir, user_input, settings)
+            return await self._run_cli_legacy(agent_workspace, user_input, settings)
         except Exception as e:
             logger.error(f"Claude Code SDK execution failed: {e}")
             return f"Error: Claude Code execution failed - {e}"
 
-    async def _get_workspace_dir(self, project) -> str:
-        from core.git_ops import get_workspace_path
-        return str(get_workspace_path(project))
+    def _needs_code_pull(self, context: Dict[str, Any]) -> bool:
+        """判断当前是否需要拉取最新代码。
+
+        条件：系统提示词中包含明确的代码处理要求。
+        """
+        prompts_to_check = [self.system_prompt, context.get("system_prompt", "")]
+        code_keywords = ["修改代码", "修复", "新增功能", "编写", "改代码",
+                         "create", "modify", "fix", "implement", "write code"]
+        for prompt in prompts_to_check:
+            if any(kw in prompt for kw in code_keywords):
+                logger.info(f"Agent {self.agent_name} prompt 包含代码处理关键词，强制拉取最新代码")
+                return True
+        return False
+
+    # ------------------------------------------------------------------
+    # SDK execution
+    # ------------------------------------------------------------------
 
     async def _run_sdk(self, workspace_dir: str, user_input: str,
                         settings, project, context: Dict[str, Any]) -> str:
@@ -198,6 +237,10 @@ class ClaudeCodeRunner:
         finally:
             await client.disconnect()
 
+    # ------------------------------------------------------------------
+    # CLI fallback
+    # ------------------------------------------------------------------
+
     async def _run_cli_legacy(self, workspace_dir: str, user_input: str,
                                settings) -> str:
         """Fallback to CLI subprocess execution."""
@@ -248,19 +291,53 @@ class ClaudeCodeRunner:
             logger.error("Claude Code CLI timed out")
             return "Error: Claude Code execution timed out"
 
+    async def _run_fallback(self, workspace_dir: str, user_input: str,
+                             settings, project, context: Dict[str, Any]) -> str:
+        """Fallback when no session_workspace is available (legacy behavior)."""
+        from core.git_ops import clone_or_pull_repo
+        try:
+            clone_or_pull_repo(project)
+        except Exception as e:
+            logger.error(f"Git clone failed for {project.name}: {e}")
+            return f"Error: Git clone failed - {e}"
+
+        try:
+            return await self._run_sdk(
+                workspace_dir=workspace_dir,
+                user_input=user_input,
+                settings=settings,
+                project=project,
+                context=context,
+            )
+        except ImportError:
+            return await self._run_cli_legacy(workspace_dir, user_input, settings)
+        except Exception as e:
+            logger.error(f"Claude Code execution failed: {e}")
+            return f"Error: Claude Code execution failed - {e}"
+
+    # ------------------------------------------------------------------
+    # Legacy inline mode
+    # ------------------------------------------------------------------
+
     async def _invoke_legacy(self, user_input: str, session_id: str,
                               context: Dict[str, Any]) -> str:
         """Legacy mode: use inline config fields for backward compatibility."""
         import asyncio
 
+        session_workspace = (context or {}).get("session_workspace", "")
+
         settings_json = self.config.get("settings_json", "")
         model = self.config.get("model", "claude-sonnet-4-6")
         max_turns = self.config.get("max_turns", 25)
-        work_dir = self.config.get("work_dir", "")
         permission_mode = self.config.get("permission_mode", "acceptEdits")
 
-        if not work_dir:
-            work_dir = os.getcwd()
+        # Determine work_dir: prefer session agent workspace
+        if session_workspace and session_id:
+            work_dir = session_manager.ensure_agent_workspace(session_id, self.agent_name)
+        else:
+            work_dir = self.config.get("work_dir", "")
+            if not work_dir:
+                work_dir = os.getcwd()
 
         claude_dir = os.path.join(work_dir, ".claude")
         os.makedirs(claude_dir, exist_ok=True)
@@ -321,9 +398,18 @@ class ClaudeCodeRunner:
             logger.error(f"Claude Code execution failed: {e}")
             raise
 
+    # ------------------------------------------------------------------
+    # CLAUDE.md writer
+    # ------------------------------------------------------------------
+
     def _write_claude_md(self, work_dir: str, context: Dict[str, Any] = None,
-                          extra_system_prompt: str = None) -> None:
-        """Build and write CLAUDE.md to work_dir."""
+                          extra_system_prompt: str = None,
+                          project_code_path: str = None) -> None:
+        """Build and write CLAUDE.md to work_dir.
+
+        If project_code_path is provided, adds a reference so the LLM
+        knows where to find the project code on disk.
+        """
         context = context or {}
         os.makedirs(work_dir, exist_ok=True)
 
@@ -340,6 +426,13 @@ class ClaudeCodeRunner:
             parts.append("")
             parts.append("## Project Instructions")
             parts.append(extra_system_prompt)
+
+        # Project code path reference (same session, potentially shared across agents)
+        if project_code_path:
+            parts.append("")
+            parts.append("## Project Code")
+            parts.append(f"项目代码位于: {project_code_path}")
+            parts.append("请使用 Read / Edit / Bash 等工具在此目录下操作代码。")
 
         if self.kb_content:
             parts.append("")
@@ -390,4 +483,4 @@ class ClaudeCodeRunner:
         claude_md_path = os.path.join(work_dir, "CLAUDE.md")
         with open(claude_md_path, "w", encoding="utf-8") as f:
             f.write(content)
-        logger.info(f"Written CLAUDE.md to {claude_md_path}")
+        logger.info(f"Written CLAUDE.md to {claude_md_path} (code path: {project_code_path or 'N/A'})")

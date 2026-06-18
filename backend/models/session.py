@@ -7,6 +7,7 @@ class Session(Model):
     user_id = fields.CharField(max_length=100, null=True)
     messages = fields.JSONField(default=list)
     thread_state = fields.JSONField(null=True)
+    workspace_path = fields.CharField(max_length=500, null=True)
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(null=True)
     expired_at = fields.DatetimeField(null=True)

@@ -1,87 +1,248 @@
-import asyncio
-from typing import Dict, Any, Optional
-from dataclasses import dataclass, field
+"""工作流执行器 — 在 worker 中重建并执行 LangGraph 工作流
+
+数据流：
+  1. worker 从 task_queue 拿到任务（app_id + session_id + message）
+  2. 从 DB 加载 App → Workflow → Agents（含 MCP/Skill 关联）
+  3. 构建 agent_nodes + workflow_config
+  4. 编译 LangGraph
+  5. 执行（ainvoke 或 astream）
+  6. 结果回写 DB + 通过 task_queue 发布
+"""
+
+import time as time_mod
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 from loguru import logger
 
+from models.app import App
+from models.workflow import Workflow
+from models.agent import Agent
+from models.mcp_server import AgentMcpLink
+from models.skill import AgentSkillLink
+from models.session import Session
+from core.workflow_engine import workflow_engine, AgentState
+from core.agent_factory import agent_factory
+from core.session_manager import session_manager
+from core.task_queue import TaskQueue
 
-@dataclass
-class WorkflowTimeoutConfig:
-    agent_timeout_seconds: int = 60
-    workflow_timeout_seconds: int = 300
-    retry_count: int = 2
-    retry_delay_seconds: int = 3
+
+async def build_workflow(session: Session, message: str) -> tuple:
+    """从 DB 重建 LangGraph 工作流和初始状态（原 chat.py _build_agent_graph）
+
+    Returns:
+        (graph, initial_state, agent_names, flow_type)
+        失败返回 (None, None, None, None)
+    """
+    messages = session.messages or []
+    messages.append({"role": "user", "content": message})
+
+    workflow = await Workflow.get_or_none(id=session.app.workflow_id)
+    if not workflow:
+        logger.error(f"Workflow not found for app {session.app_id}")
+        return None, None, None, None
+
+    worker_ids = workflow.worker_agent_ids or []
+    agent_nodes = {}
+    agent_names = []
+
+    for wid in worker_ids:
+        agent = await Agent.get_or_none(id=wid)
+        if not agent:
+            continue
+        mcp_links = await AgentMcpLink.filter(agent_id=agent.id).prefetch_related("mcp_server")
+        skill_links = await AgentSkillLink.filter(agent_id=agent.id).prefetch_related("skill")
+        config = {
+            "name": agent.name, "agent_type": agent.agent_type, "role": agent.role,
+            "llm_config": agent.llm_config, "llm_config_id": agent.llm_config_id,
+            "http_config": agent.http_config, "claudecode_config": agent.claudecode_config,
+            "system_prompt": agent.system_prompt,
+            "knowledge_base_ids": agent.knowledge_base_ids or [],
+            "mcp_servers": [{
+                "id": ml.mcp_server.id, "name": ml.mcp_server.name,
+                "base_url": ml.mcp_server.base_url, "headers": ml.mcp_server.headers,
+                "single_endpoint": ml.mcp_server.single_endpoint,
+                "enabled_tools": ml.enabled_tools, "enabled": ml.enabled,
+            } for ml in mcp_links],
+            "skills": [{
+                "name": sl.skill.name, "skill_type": sl.skill.skill_type,
+                "content": sl.skill.content,
+            } for sl in skill_links],
+        }
+        node_fn = await agent_factory.create(config)
+        agent_nodes[agent.name] = node_fn
+        agent_names.append(agent.name)
+
+    wf_config: Dict[str, Any] = {
+        "flow_type": workflow.flow_type,
+        "worker_agent_ids": agent_names,
+    }
+
+    if workflow.flow_type == "supervisor" and workflow.supervisor_agent_id:
+        sup_agent = await Agent.get_or_none(id=workflow.supervisor_agent_id)
+        if sup_agent:
+            mcp_links = await AgentMcpLink.filter(agent_id=sup_agent.id).prefetch_related("mcp_server")
+            skill_links = await AgentSkillLink.filter(agent_id=sup_agent.id).prefetch_related("skill")
+            wf_config["supervisor_agent_name"] = sup_agent.name
+            sup_config = {
+                "name": sup_agent.name, "agent_type": sup_agent.agent_type, "role": sup_agent.role,
+                "llm_config": sup_agent.llm_config, "llm_config_id": sup_agent.llm_config_id,
+                "system_prompt": sup_agent.system_prompt,
+                "knowledge_base_ids": sup_agent.knowledge_base_ids or [],
+                "mcp_servers": [{
+                    "id": ml.mcp_server.id, "name": ml.mcp_server.name,
+                    "base_url": ml.mcp_server.base_url, "headers": ml.mcp_server.headers,
+                    "single_endpoint": ml.mcp_server.single_endpoint,
+                    "enabled_tools": ml.enabled_tools, "enabled": ml.enabled,
+                } for ml in mcp_links],
+                "skills": [{
+                    "name": sl.skill.name, "skill_type": sl.skill.skill_type,
+                    "content": sl.skill.content,
+                } for sl in skill_links],
+                "_available_workers": agent_names,
+            }
+            sup_node_fn = await agent_factory.create(sup_config)
+            agent_nodes[sup_agent.name] = sup_node_fn
+
+    graph = await workflow_engine.build_workflow(wf_config, agent_nodes)
+    initial_state: AgentState = {
+        "user_input": message, "messages": messages,
+        "current_agent": "", "next_agent": "",
+        "intermediate_results": {}, "final_answer": "",
+        "need_human": False, "human_input": "", "error": None, "trace": [],
+        "session_id": session.id,
+        "session_workspace": session.workspace_path or "",
+    }
+    return graph, initial_state, agent_names, workflow.flow_type
 
 
-class WorkflowExecutor:
-    """带错误处理的工作流执行器"""
+async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
+    """worker 执行入口：重建工作流 → 执行 → 回写结果
 
-    def __init__(self, config: WorkflowTimeoutConfig = None):
-        self.config = config or WorkflowTimeoutConfig()
-        self.error_log: list = []
+    Args:
+        task: 从队列取到的任务 dict
+        task_queue: TaskQueue 实例（用于发布事件/结果）
+    """
+    task_id = task["task_id"]
+    app_id = task["app_id"]
+    session_id = task["session_id"]
+    message = task["message"]
+    stream = task.get("stream", False)
 
-    async def execute_with_timeout(self, agent_fn, state: Dict[str, Any],
-                                    agent_name: str) -> Dict[str, Any]:
-        """带超时的 Agent 执行"""
-        try:
-            result = await asyncio.wait_for(
-                agent_fn(state),
-                timeout=self.config.agent_timeout_seconds,
+    start = time_mod.time()
+
+    try:
+        app = await App.get_or_none(id=app_id, enabled=True)
+        if not app:
+            raise ValueError(f"App {app_id} not found or disabled")
+
+        # 获取/创建 session workspace
+        session = await Session.get_or_none(id=session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+
+        if not session.workspace_path:
+            ws = await session_manager.create_workspace(session_id)
+            session.workspace_path = ws
+
+        # 构建工作流图
+        graph, initial_state, agent_names, flow_type = await build_workflow(session, message)
+        if graph is None:
+            raise ValueError("Failed to build workflow graph")
+
+        if stream:
+            # ── 流式执行 ──
+            await task_queue.publish_event(task_id, "thinking", content="正在分析问题...")
+            final_answer = ""
+            seen_outputs = set()
+
+            async for chunk in graph.astream(initial_state, stream_mode="updates"):
+                for node_name, update in chunk.items():
+                    intermediate = update.get("intermediate_results") or {}
+                    trace = update.get("trace") or []
+
+                    for t in trace:
+                        if t.get("type") == "supervisor_route":
+                            target = t.get("target", "end")
+                            if target != "end":
+                                await task_queue.publish_event(
+                                    task_id, "agent_call", agent=target
+                                )
+
+                    for agent_name, output in intermediate.items():
+                        if agent_name.startswith("_"):
+                            continue
+                        output_str = str(output)
+                        output_key = f"{agent_name}:{output_str[:50]}"
+                        if output_key not in seen_outputs:
+                            seen_outputs.add(output_key)
+                            await task_queue.publish_event(
+                                task_id, "agent_result",
+                                agent=agent_name, output=output_str[:500],
+                            )
+
+                    for k, v in intermediate.items():
+                        if not k.startswith("_"):
+                            final_answer = str(v)
+
+            if final_answer:
+                await task_queue.publish_event(task_id, "text", content=final_answer)
+
+            duration_ms = int((time_mod.time() - start) * 1000)
+            await task_queue.publish_event(
+                task_id, "done",
+                session_id=session_id, duration_ms=duration_ms,
             )
-            return {"success": True, "result": result, "agent": agent_name}
-        except asyncio.TimeoutError:
-            self.error_log.append({
-                "agent": agent_name, "error": "timeout",
-                "message": f"超过 {self.config.agent_timeout_seconds}s 限制",
+
+            # 更新 session 消息
+            msg_list = (session.messages or [])[:]
+            msg_list.append({"role": "assistant", "content": final_answer})
+            session.messages = msg_list
+            session.updated_at = datetime.now()
+            await session.save()
+
+            # 写入结果
+            await task_queue.publish_result(task_id, {
+                "final_answer": final_answer,
+                "duration_ms": duration_ms,
+                "session_id": session_id,
             })
-            return {"success": False, "error": "timeout", "agent": agent_name}
-        except Exception as e:
-            self.error_log.append({"agent": agent_name, "error": str(e)})
-            return {"success": False, "error": str(e), "agent": agent_name}
 
-    async def execute_with_retry(self, agent_fn, state: Dict[str, Any],
-                                  agent_name: str) -> Dict[str, Any]:
-        """带重试的 Agent 执行"""
-        last_error = None
-        for attempt in range(self.config.retry_count + 1):
-            result = await self.execute_with_timeout(agent_fn, state, agent_name)
-            if result["success"]:
-                result["retry_attempt"] = attempt
-                return result
-            last_error = result
-            if attempt < self.config.retry_count:
-                logger.warning(f"Retrying {agent_name} ({attempt + 1}/{self.config.retry_count})")
-                await asyncio.sleep(self.config.retry_delay_seconds)
-        last_error["retry_exhausted"] = True
-        return last_error
+        else:
+            # ── 非流式执行 ──
+            result = await graph.ainvoke(initial_state)
+            duration_ms = int((time_mod.time() - start) * 1000)
 
-    async def execute_workflow(self, compiled_graph, initial_state: Dict[str, Any],
-                                error_strategy: str = "fail_fast") -> Dict[str, Any]:
-        """执行编译后的工作流（带整体超时控制）"""
-        try:
-            result = await asyncio.wait_for(
-                compiled_graph.ainvoke(initial_state),
-                timeout=self.config.workflow_timeout_seconds,
-            )
-            return {"success": True, "result": result}
-        except asyncio.TimeoutError:
-            logger.error(f"Workflow timed out after {self.config.workflow_timeout_seconds}s")
-            return {
-                "success": False,
-                "error": "workflow_timeout",
-                "intermediate_results": initial_state.get("intermediate_results", {}),
-            }
-        except Exception as e:
-            logger.error(f"Workflow failed: {e}")
-            if error_strategy == "skip_continue":
-                return {
-                    "success": True,
-                    "partial": True,
-                    "result": initial_state,
-                    "errors": self.error_log,
-                }
-            return {
-                "success": False,
-                "error": str(e),
-                "intermediate_results": initial_state.get("intermediate_results", {}),
-                "error_log": self.error_log,
-            }
+            final_answer = result.get("final_answer", "")
+            if not final_answer:
+                intermediate = result.get("intermediate_results", {})
+                if intermediate:
+                    last_key = list(intermediate.keys())[-1]
+                    final_answer = intermediate.get(last_key, "")
+
+            msg_list = (session.messages or [])[:]
+            msg_list.append({"role": "assistant", "content": final_answer})
+            session.messages = msg_list
+            session.updated_at = datetime.now()
+            await session.save()
+
+            await task_queue.publish_result(task_id, {
+                "final_answer": final_answer,
+                "intermediate_results": result.get("intermediate_results", {}),
+                "duration_ms": duration_ms,
+                "trace": result.get("trace", []),
+                "session_id": session_id,
+            })
+
+            logger.info(f"Task {task_id} completed in {duration_ms}ms")
+
+    except Exception as e:
+        logger.error(f"Task {task_id} failed: {e}")
+        await task_queue.publish_result(task_id, {
+            "error": str(e),
+            "final_answer": f"执行出错: {str(e)}",
+            "duration_ms": int((time_mod.time() - start) * 1000),
+            "session_id": session_id,
+        })
+        if stream:
+            await task_queue.publish_event(task_id, "error", message=str(e))

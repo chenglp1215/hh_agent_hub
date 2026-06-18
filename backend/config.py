@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     FERNET_KEY: str = ""
     DEFAULT_RATE_LIMIT: int = 60
     SESSION_TTL: int = 3600
+    WORKSPACE_BASE: str = "/data/workflow_workspaces"
 
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "./logs/app.log"

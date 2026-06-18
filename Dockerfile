@@ -24,6 +24,7 @@ RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua
 
 # 复制源码
 COPY backend/ ./backend/
+COPY worker/ ./worker/
 
 # 创建数据和日志目录
 RUN mkdir -p /data /logs

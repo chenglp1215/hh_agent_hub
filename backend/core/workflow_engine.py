@@ -15,6 +15,8 @@ class AgentState(TypedDict):
     human_input: str
     trace: List[Dict[str, Any]]
     error: Optional[str]
+    session_id: str
+    session_workspace: str
 
 
 class WorkflowEngine:

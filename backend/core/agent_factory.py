@@ -442,6 +442,7 @@ class AgentNodeFactory:
             kb_content=kb_content,
             skill_content=skill_content,
             agent_name=agent_config.get("name", "unknown"),
+            system_prompt=agent_config.get("system_prompt", ""),
         )
         agent_name = agent_config.get("name", "unknown")
 

@@ -6,7 +6,9 @@ from models.app import App
 
 class ApiKeyMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if request.url.path.startswith("/api/v1/chat"):
+        path = request.url.path
+        # 精确匹配 /api/v1/chat 及其子路径，排除 /api/v1/chat-logs
+        if path == "/api/v1/chat" or path.startswith("/api/v1/chat/"):
             api_key = request.headers.get("X-API-Key", "")
             if not api_key:
                 return JSONResponse(

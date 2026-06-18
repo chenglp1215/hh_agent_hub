@@ -49,6 +49,7 @@
         <template #icon><LineChartOutlined /></template>
         <template #title>监控</template>
         <a-menu-item key="/monitor/traces">执行追踪</a-menu-item>
+        <a-menu-item key="/monitor/chat-logs">对话日志</a-menu-item>
         <a-menu-item key="/monitor/chat-test">对话测试</a-menu-item>
       </a-sub-menu>
 

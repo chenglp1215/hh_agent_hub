@@ -47,6 +47,7 @@ const router = createRouter({
         { path: 'monitor/traces', name: 'ExecutionTraceList', component: () => import('@/views/ExecutionTraceList.vue'), meta: { title: '执行追踪' } },
         { path: 'monitor/traces/:executionId', name: 'ExecutionTraceDetail', component: () => import('@/views/ExecutionTrace.vue'), meta: { title: '追踪详情' }, props: true },
         { path: 'monitor/chat-test', name: 'ChatTest', component: () => import('@/views/ChatTest.vue'), meta: { title: '对话测试' } },
+        { path: 'monitor/chat-logs', name: 'ChatLogList', component: () => import('@/views/ChatLogList.vue'), meta: { title: '对话日志' } },
         // System settings
         { path: 'settings', name: 'SystemConfig', component: () => import('@/views/SystemConfig.vue'), meta: { title: '系统配置', requireAdmin: true } },
         { path: 'settings/llm-configs', name: 'LlmConfigList', component: () => import('@/views/LlmConfigList.vue'), meta: { title: 'LLM 配置', requireAdmin: true } },

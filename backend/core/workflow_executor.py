@@ -37,7 +37,14 @@ async def build_workflow(session: Session, message: str) -> tuple:
     messages = session.messages or []
     messages.append({"role": "user", "content": message})
 
-    workflow = await Workflow.get_or_none(id=session.app.workflow_id)
+    # Tortoise ORM: ForeignKey 需要 await 才能获取关联对象
+    try:
+        app_obj = await session.app
+        workflow_id = app_obj.workflow_id
+    except AttributeError:
+        workflow_id = None
+
+    workflow = await Workflow.get_or_none(id=workflow_id)
     if not workflow:
         logger.error(f"Workflow not found for app {session.app_id}")
         return None, None, None, None

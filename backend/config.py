@@ -63,6 +63,7 @@ TORTOISE_ORM = {
                 "models.skill",
                 "models.project_registry",
                 "models.claude_settings",
+                "models.chat_log",
                 "models.workflow_trace",
             ],
             "default_connection": "default",

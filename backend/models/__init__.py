@@ -10,6 +10,7 @@ from .workflow import Workflow
 from .app import App
 from .session import Session
 from .workflow_trace import WorkflowTrace
+from .chat_log import ChatLog
 from .audit_log import AuditLog
 
 __all__ = [
@@ -31,5 +32,6 @@ __all__ = [
     "App",
     "Session",
     "WorkflowTrace",
+    "ChatLog",
     "AuditLog",
 ]

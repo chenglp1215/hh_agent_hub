@@ -25,6 +25,7 @@ from core.workflow_engine import workflow_engine, AgentState
 from core.agent_factory import agent_factory
 from core.session_manager import session_manager
 from core.task_queue import TaskQueue
+from models.chat_log import ChatLog
 
 
 async def build_workflow(session: Session, message: str) -> tuple:
@@ -137,6 +138,10 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
     stream = task.get("stream", False)
 
     start = time_mod.time()
+    final_answer = ""
+    agent_names = []
+    trace_data = []
+    error_message = None
 
     try:
         app = await App.get_or_none(id=app_id, enabled=True)
@@ -208,6 +213,11 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
             session.updated_at = datetime.now()
             await session.save()
 
+            # 写入 ChatLog
+            await _save_chat_log(app, session, task_id, message,
+                                 final_answer, duration_ms, "success",
+                                 agent_names=agent_names, trace_data=trace_data)
+
             # 写入结果
             await task_queue.publish_result(task_id, {
                 "final_answer": final_answer,
@@ -227,17 +237,24 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
                     last_key = list(intermediate.keys())[-1]
                     final_answer = intermediate.get(last_key, "")
 
+            trace_data = result.get("trace", [])
+
             msg_list = (session.messages or [])[:]
             msg_list.append({"role": "assistant", "content": final_answer})
             session.messages = msg_list
             session.updated_at = datetime.now()
             await session.save()
 
+            # 写入 ChatLog
+            await _save_chat_log(app, session, task_id, message,
+                                 final_answer, duration_ms, "success",
+                                 agent_names=agent_names, trace_data=trace_data)
+
             await task_queue.publish_result(task_id, {
                 "final_answer": final_answer,
                 "intermediate_results": result.get("intermediate_results", {}),
                 "duration_ms": duration_ms,
-                "trace": result.get("trace", []),
+                "trace": trace_data,
                 "session_id": session_id,
             })
 
@@ -251,5 +268,49 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
             "duration_ms": int((time_mod.time() - start) * 1000),
             "session_id": session_id,
         })
+        # 出错时也写入 ChatLog
+        try:
+            session = await Session.get_or_none(id=session_id)
+            app = await App.get_or_none(id=app_id) if app_id else None
+            await _save_chat_log(app, session, task_id, message,
+                                 final_answer, duration_ms, "error",
+                                 agent_names=agent_names, trace_data=trace_data,
+                                 error_message=str(e))
+        except Exception as log_err:
+            logger.warning(f"Failed to save ChatLog: {log_err}")
+
         if stream:
             await task_queue.publish_event(task_id, "error", message=str(e))
+
+
+async def _save_chat_log(app, session, task_id: str, user_input: str,
+                          final_answer: str, duration_ms: int, status: str,
+                          agent_names: List[str] = None,
+                          trace_data: List[Dict] = None,
+                          error_message: str = None):
+    """将 chat 交互写入 ChatLog 表"""
+    try:
+        # 提取 trace 摘要（只保留关键事件，用于前端展示）
+        trace_summary = None
+        if trace_data:
+            trace_summary = [
+                {k: v for k, v in t.items() if k in (
+                    "type", "agent", "round", "target", "output_len", "elapsed_ms"
+                )}
+                for t in trace_data
+            ]
+
+        await ChatLog.create(
+            app=app,
+            session=session,
+            task_id=task_id,
+            user_input=user_input,
+            final_answer=final_answer,
+            duration_ms=duration_ms,
+            status=status,
+            error_message=error_message,
+            agent_count=len(agent_names or []),
+            trace_summary=trace_summary,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to save ChatLog: {e}")

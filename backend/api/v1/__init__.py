@@ -61,6 +61,10 @@ from api.v1.ws import router as ws_router
 router.include_router(ws_router)
 
 
+from api.v1.chat_logs import router as chat_logs_router
+router.include_router(chat_logs_router)
+
+
 @router.get("/ping")
 async def ping():
     return {"ping": "pong"}

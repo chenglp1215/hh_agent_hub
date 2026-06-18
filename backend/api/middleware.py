@@ -7,7 +7,7 @@ from models.app import App
 class ApiKeyMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if request.url.path.startswith("/api/v1/chat"):
-            api_key = request.headers.get("X-API-Key") or request.headers.get("Authorization", "").replace("Bearer ", "")
+            api_key = request.headers.get("X-API-Key", "")
             if not api_key:
                 return JSONResponse(
                     status_code=401,

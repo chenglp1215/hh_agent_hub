@@ -1,8 +1,10 @@
 """ChatLog 查询 API — 查看所有 Chat 交互记录"""
 
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, Request, Query, Depends
 from models.chat_log import ChatLog
+from models.user import User
 from utils.response import success, error
+from api.deps import get_current_user
 
 router = APIRouter(prefix="/chat-logs", tags=["对话日志"])
 
@@ -10,6 +12,7 @@ router = APIRouter(prefix="/chat-logs", tags=["对话日志"])
 @router.get("")
 async def list_chat_logs(
     request: Request,
+    user: User = Depends(get_current_user),
     app_id: int = Query(None, description="按应用筛选"),
     session_id: str = Query(None, description="按会话筛选"),
     status: str = Query(None, description="按状态筛选: success/error"),
@@ -61,7 +64,7 @@ async def list_chat_logs(
 
 
 @router.get("/{log_id}")
-async def get_chat_log(log_id: int, request: Request):
+async def get_chat_log(log_id: int, request: Request, user: User = Depends(get_current_user)):
     """获取单条 ChatLog 详情"""
     log = await ChatLog.get_or_none(id=log_id)
     if not log:

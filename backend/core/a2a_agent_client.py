@@ -38,6 +38,11 @@ class A2AAgentClient:
             raise RuntimeError(error_msg)
 
         self._card = ParseDict(card_data, a2a_pb2.AgentCard(), ignore_unknown_fields=True)
+        # 标准化 protocol_binding：Agent Card 常用 "json-rpc"，SDK 认 "JSONRPC"
+        for iface in self._card.supported_interfaces:
+            raw = iface.protocol_binding.lower().replace("-", "").replace("_", "")
+            if raw in ("jsonrpc",):
+                iface.protocol_binding = "JSONRPC"
         logger.info(f"A2A Agent Card 获取成功: {self.agent_card_url}")
         return self._card
 

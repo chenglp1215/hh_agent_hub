@@ -16,7 +16,7 @@ class McpServerConnection:
 
 class MCPClient:
     REQUEST_TIMEOUT = 30
-    TOOL_CALL_TIMEOUT = 60
+    TOOL_CALL_TIMEOUT = 300
 
     def __init__(self):
         self._connections: Dict[int, McpServerConnection] = {}

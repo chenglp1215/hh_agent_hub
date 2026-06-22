@@ -109,6 +109,36 @@ async def test_connection(server_id: int, user=Depends(require_admin)):
     try:
         conn = await mcp_client.connect(server_id, s.base_url, s.headers, single_endpoint=s.single_endpoint)
         ok = await mcp_client.ping(conn)
+        s.status = "active" if ok else "error"
+        s.last_checked_at = datetime.now()
+        await s.save()
         return success(data={"connected": ok})
     except Exception as e:
+        s.status = "error"
+        s.last_checked_at = datetime.now()
+        await s.save()
         return success(data={"connected": False, "error": str(e)})
+
+
+@router.post("/batch-test")
+async def batch_test_connections(user=Depends(require_admin)):
+    """测试所有 MCP Server 的连接状态并更新 status"""
+    servers = await McpServerRegistry.all()
+    results = []
+    for s in servers:
+        try:
+            conn = await mcp_client.connect(s.id, s.base_url, s.headers, single_endpoint=s.single_endpoint)
+            ok = await mcp_client.ping(conn)
+            s.status = "active" if ok else "error"
+        except Exception:
+            s.status = "error"
+            ok = False
+        s.last_checked_at = datetime.now()
+        await s.save()
+        results.append({
+            "id": s.id,
+            "name": s.name,
+            "connected": ok,
+            "status": s.status,
+        })
+    return success(data={"results": results, "total": len(servers)})

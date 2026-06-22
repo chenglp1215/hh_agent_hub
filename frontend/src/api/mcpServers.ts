@@ -8,4 +8,5 @@ export const mcpServersApi = {
   delete: (id: number) => client.delete(`/mcp-servers/${id}`),
   discover: (id: number) => client.post(`/mcp-servers/${id}/discover`),
   test: (id: number) => client.post(`/mcp-servers/${id}/test`),
+  batchTest: () => client.post('/mcp-servers/batch-test'),
 }

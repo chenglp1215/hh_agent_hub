@@ -137,13 +137,23 @@ def test_non_stream(body: dict):
 
     result = response.json()
     code = result.get("code")
-    if code != 200:
+    if code != 0:
         print(f"❌ API 返回错误 code={code}: {result.get('message', '')}")
         return
 
     data = result.get("data", {})
     final_answer = data.get("message", "")
-    intermediate = data.get("intermediate_results", {})
+    if isinstance(final_answer, int):
+        # message 是 int（消息ID），实际回复在 intermediate_results 中
+        intermediate = data.get("intermediate_results", {})
+        # 取最后一个非 supervisor 的结果作为最终回复
+        final_answer = ""
+        for agent in reversed(list(intermediate.keys())):
+            if not agent.startswith("_"):
+                final_answer = str(intermediate[agent])
+                break
+    else:
+        intermediate = data.get("intermediate_results", {})
     duration = data.get("duration_ms", 0)
     trace = data.get("trace", [])
 

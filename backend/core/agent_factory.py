@@ -145,9 +145,15 @@ class AgentNodeFactory:
 
         # 4a. Supervisor 路由指令注入
         available_workers = agent_config.get("_available_workers", [])
+        worker_descriptions = agent_config.get("_worker_descriptions", {})
         routing_instruction = ""
         if available_workers:
-            worker_list = "\n".join(f"- {name}" for name in available_workers)
+            lines = []
+            for name in available_workers:
+                desc = worker_descriptions.get(name, "")
+                line = f"- {name}" + (f" — {desc}" if desc else "")
+                lines.append(line)
+            worker_list = "\n".join(lines)
             routing_instruction = (
                 f"\n\n---\n"
                 f"你是工作流调度主管，负责将用户问题分派给合适的子代理。\n"

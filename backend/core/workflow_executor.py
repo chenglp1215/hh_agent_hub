@@ -53,6 +53,7 @@ async def build_workflow(session: Session, message: str) -> tuple:
     worker_ids = workflow.worker_agent_ids or []
     agent_nodes = {}
     agent_names = []
+    worker_descriptions = {}
 
     for wid in worker_ids:
         agent = await Agent.get_or_none(id=wid)
@@ -81,6 +82,7 @@ async def build_workflow(session: Session, message: str) -> tuple:
         node_fn = await agent_factory.create(config)
         agent_nodes[agent.name] = node_fn
         agent_names.append(agent.name)
+        worker_descriptions[agent.name] = agent.description or ""
 
     wf_config: Dict[str, Any] = {
         "flow_type": workflow.flow_type,
@@ -109,6 +111,7 @@ async def build_workflow(session: Session, message: str) -> tuple:
                     "content": sl.skill.content,
                 } for sl in skill_links],
                 "_available_workers": agent_names,
+                "_worker_descriptions": worker_descriptions,
             }
             sup_node_fn = await agent_factory.create(sup_config)
             agent_nodes[sup_agent.name] = sup_node_fn

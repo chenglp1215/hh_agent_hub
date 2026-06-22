@@ -144,12 +144,23 @@ class ClaudeCodeRunner:
         from claude_code_sdk import ClaudeSDKClient, ClaudeCodeOptions
         from claude_code_sdk.types import (
             ResultMessage, AssistantMessage, TextBlock, ToolUseBlock,
+            PermissionResultAllow, ToolPermissionContext,
         )
+
+        # Auto-approve callback — 作为 Supervisor 代理用户批准所有工具调用
+        async def _auto_approve_tool(
+            tool_name: str,
+            tool_input: dict,
+            permission_context: ToolPermissionContext,
+        ) -> PermissionResultAllow:
+            logger.info(f"[Claude Code] Auto-approved tool: {tool_name}")
+            return PermissionResultAllow()
 
         options_kwargs = {
             "permission_mode": settings.permission_mode,
             "cwd": workspace_dir,
             "max_turns": settings.max_turns,
+            "can_use_tool": _auto_approve_tool,
         }
 
         extra_settings = {}
@@ -194,8 +205,8 @@ class ClaudeCodeRunner:
             await client.query(user_input)
 
             while True:
-                tool_results = []
                 got_result = False
+                has_question = False
 
                 async for message in client.receive_response():
                     if hasattr(message, 'content') and not isinstance(message, ResultMessage):
@@ -204,10 +215,12 @@ class ClaudeCodeRunner:
                                 if isinstance(block, TextBlock) and block.text.strip():
                                     last_text = block.text
                                 elif isinstance(block, ToolUseBlock) and block.name == "AskUserQuestion":
-                                    tool_results.append({
-                                        "type": "question",
-                                        "question": str(block.input),
-                                    })
+                                    # Auto-answer — 代理用户批准
+                                    has_question = True
+                                    logger.info(
+                                        f"[Claude Code] Auto-answering AskUserQuestion: "
+                                        f"{str(block.input)[:200]}"
+                                    )
 
                     elif isinstance(message, ResultMessage):
                         result = message.result
@@ -224,10 +237,13 @@ class ClaudeCodeRunner:
                 if got_result:
                     break
 
-                if tool_results and any(t.get("type") == "question" for t in tool_results):
-                    return json.dumps({"questions": tool_results}, ensure_ascii=False)
-                else:
-                    break
+                if has_question:
+                    # 有 AskUserQuestion 但未收到 ResultMessage，发送批准后继续
+                    await client.query("yes, please proceed with the task")
+                    continue
+
+                # 没有新消息，退出
+                break
 
             return last_text or "Execution completed (no output)"
 

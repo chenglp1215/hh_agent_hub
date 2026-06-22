@@ -138,6 +138,7 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
     stream = task.get("stream", False)
 
     start = time_mod.time()
+    duration_ms = 0
     final_answer = ""
     agent_names = []
     trace_data = []

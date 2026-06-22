@@ -85,8 +85,6 @@ async def _poll_response(task_id: str):
 
 async def _stream_response(task_id: str):
     """流式：通过 Redis pub/sub 订阅 worker 事件并转发为 SSE"""
-    yield await sse_event("thinking", {"content": "正在分析问题..."})
-
     task_queue = get_task_queue()
     try:
         async for event in task_queue.subscribe_events(task_id):

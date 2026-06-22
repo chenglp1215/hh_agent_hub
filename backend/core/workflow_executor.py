@@ -168,6 +168,7 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
             await task_queue.publish_event(task_id, "thinking", content="正在分析问题...")
             final_answer = ""
             seen_outputs = set()
+            seen_routes = set()
 
             async for chunk in graph.astream(initial_state, stream_mode="updates"):
                 for node_name, update in chunk.items():
@@ -177,7 +178,9 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
                     for t in trace:
                         if t.get("type") == "supervisor_route":
                             target = t.get("target", "end")
-                            if target != "end":
+                            route_key = f"{t.get('round')}:{target}"
+                            if target != "end" and route_key not in seen_routes:
+                                seen_routes.add(route_key)
                                 await task_queue.publish_event(
                                     task_id, "agent_call", agent=target
                                 )

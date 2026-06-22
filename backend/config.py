@@ -1,3 +1,4 @@
+import os
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
@@ -12,6 +13,9 @@ class Settings(BaseSettings):
     DB_USER: str = "agent_platform"
     DB_PASSWORD: str = ""
     DB_NAME: str = "agent_platform"
+
+    USE_SQLITE: bool = False
+    SQLITE_PATH: str = ""
 
     REDIS_URL: str = "redis://localhost:6379/0"
 
@@ -33,41 +37,61 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-TORTOISE_ORM = {
-    "connections": {
-        "default": {
-            "engine": "tortoise.backends.mysql",
-            "credentials": {
-                "host": settings.DB_HOST,
-                "port": settings.DB_PORT,
-                "user": settings.DB_USER,
-                "password": settings.DB_PASSWORD,
-                "database": settings.DB_NAME,
-                "charset": "utf8mb4",
-            },
-        }
-    },
-    "apps": {
-        "models": {
-            "models": [
-                "models.sys_config",
-                "models.user",
-                "models.llm_config",
-                "models.agent",
-                "models.workflow",
-                "models.app",
-                "models.session",
-                "models.audit_log",
-                "models.mcp_server",
-                "models.knowledge_base",
-                "models.skill",
-                "models.project_registry",
-                "models.claude_settings",
-                "models.chat_log",
-                "models.workflow_trace",
-            ],
-            "default_connection": "default",
-        }
-    },
-    "timezone": "Asia/Shanghai",
-}
+MODELS = [
+    "models.sys_config",
+    "models.user",
+    "models.llm_config",
+    "models.agent",
+    "models.workflow",
+    "models.app",
+    "models.session",
+    "models.audit_log",
+    "models.mcp_server",
+    "models.knowledge_base",
+    "models.skill",
+    "models.project_registry",
+    "models.claude_settings",
+    "models.chat_log",
+    "models.workflow_trace",
+]
+
+if settings.USE_SQLITE:
+    sqlite_path = settings.SQLITE_PATH or str(settings.BASE_DIR.parent / "test_app.db")
+    TORTOISE_ORM = {
+        "connections": {
+            "default": {
+                "engine": "tortoise.backends.sqlite",
+                "credentials": {"file_path": sqlite_path},
+            }
+        },
+        "apps": {
+            "models": {
+                "models": MODELS,
+                "default_connection": "default",
+            }
+        },
+        "timezone": "Asia/Shanghai",
+    }
+else:
+    TORTOISE_ORM = {
+        "connections": {
+            "default": {
+                "engine": "tortoise.backends.mysql",
+                "credentials": {
+                    "host": settings.DB_HOST,
+                    "port": settings.DB_PORT,
+                    "user": settings.DB_USER,
+                    "password": settings.DB_PASSWORD,
+                    "database": settings.DB_NAME,
+                    "charset": "utf8mb4",
+                },
+            }
+        },
+        "apps": {
+            "models": {
+                "models": MODELS,
+                "default_connection": "default",
+            }
+        },
+        "timezone": "Asia/Shanghai",
+    }

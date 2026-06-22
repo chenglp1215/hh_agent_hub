@@ -138,7 +138,7 @@
         <!-- A2A Config -->
         <template v-if="form.agent_type === 'a2a'">
           <h3 class="text-lg font-semibold mb-4 mt-4 text-[#5e6ad2]">A2A 对端配置</h3>
-          <a-form-item label="Agent Card URL" name="a2a_agent_card_url" :rules="[{ required: true, message: '请输入 Agent Card URL' }]">
+          <a-form-item label="Agent Card URL" required>
             <a-input v-model:value="a2aConfig.agent_card_url" placeholder="http://peer-agent:8080/api/v1/mdr_log_analyze_mcp/a2a/agent-card.json" />
           </a-form-item>
           <a-form-item label="请求头 (JSON)">
@@ -370,6 +370,9 @@ function buildFormData() {
     }
   }
   if (form.value.agent_type === 'a2a') {
+    if (!a2aConfig.value.agent_card_url?.trim()) {
+      throw new Error('请输入 Agent Card URL')
+    }
     try {
       data.a2a_config = { ...a2aConfig.value, headers: JSON.parse(a2aConfigHeaders.value || '{}') }
     } catch {

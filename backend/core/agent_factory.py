@@ -418,6 +418,38 @@ class AgentNodeFactory:
 
         return agent_node
 
+    async def create_a2a_agent(self, agent_config: Dict[str, Any]):
+        """创建 a2a 类型 Agent 的执行节点
+
+        将请求委托给对端 Agent 服务（A2A 协议）。
+
+        Args:
+            agent_config: Agent 配置字典，包含 a2a_config 等字段
+
+        Returns:
+            异步函数，接收 state dict 并返回更新后的 state dict
+        """
+        from core.a2a_agent_client import A2AAgentClient
+        client = A2AAgentClient(agent_config.get("a2a_config", {}))
+        agent_name = agent_config.get("name", "unknown")
+
+        async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
+            user_input = state.get("user_input", "")
+            session_id = state.get("session_id", "")
+            try:
+                output = await client.send(user_input, session_id, state)
+            except Exception as e:
+                output = f"A2A Agent error: {str(e)}"
+                logger.error(f"A2A Agent {agent_name} failed: {e}")
+
+            intermediate = state.get("intermediate_results", {})
+            intermediate[agent_name] = output
+            return {
+                "intermediate_results": intermediate,
+            }
+
+        return agent_node
+
     async def create_claudecode_agent(self, agent_config: Dict[str, Any],
                                        mcp_servers: List[Dict] = None,
                                        kb_content: List[Dict] = None,
@@ -470,6 +502,8 @@ class AgentNodeFactory:
             return await self.create_local_agent(agent_config, event_queue=event_queue)
         elif agent_type == "http":
             return await self.create_http_agent(agent_config)
+        elif agent_type == "a2a":
+            return await self.create_a2a_agent(agent_config)
         elif agent_type == "claudecode":
             return await self.create_claudecode_agent(
                 agent_config,

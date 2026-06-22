@@ -25,6 +25,7 @@
               <a-select v-model:value="form.agent_type">
                 <a-select-option value="local">本地 Agent</a-select-option>
                 <a-select-option value="http">HTTP Agent</a-select-option>
+                <a-select-option value="a2a">A2A Agent</a-select-option>
                 <a-select-option value="claudecode">Claude Code</a-select-option>
               </a-select>
             </a-form-item>
@@ -134,6 +135,20 @@
           </a-form-item>
         </template>
 
+        <!-- A2A Config -->
+        <template v-if="form.agent_type === 'a2a'">
+          <h3 class="text-lg font-semibold mb-4 mt-4 text-[#5e6ad2]">A2A 对端配置</h3>
+          <a-form-item label="Agent Card URL" name="a2a_agent_card_url" :rules="[{ required: true, message: '请输入 Agent Card URL' }]">
+            <a-input v-model:value="a2aConfig.agent_card_url" placeholder="http://peer-agent:8080/api/v1/mdr_log_analyze_mcp/a2a/agent-card.json" />
+          </a-form-item>
+          <a-form-item label="请求头 (JSON)">
+            <a-textarea v-model:value="a2aConfigHeaders" :rows="3" placeholder='{"X-API-Key": "sk-test-key-123"}' />
+          </a-form-item>
+          <a-form-item label="超时(秒)">
+            <a-input-number v-model:value="a2aConfig.timeout" :min="5" :max="300" class="w-full" />
+          </a-form-item>
+        </template>
+
         <!-- Claude Code Config -->
         <template v-if="form.agent_type === 'claudecode'">
           <h3 class="text-lg font-semibold mb-4 mt-4 text-[#5e6ad2]">Claude Code 配置</h3>
@@ -238,6 +253,12 @@ async function loadLlmConfigOptions() {
   } catch { /* ignore */ }
 }
 const httpConfigHeaders = ref('{}')
+const a2aConfig = ref<any>({
+  agent_card_url: '',
+  headers: {},
+  timeout: 30,
+})
+const a2aConfigHeaders = ref('{}')
 const ccConfig = ref<any>({
   project_registry_id: undefined,
   settings_registry_id: undefined,
@@ -303,6 +324,10 @@ async function loadAgent() {
       httpConfig.value = d.http_config
       httpConfigHeaders.value = JSON.stringify(d.http_config.headers || {}, null, 2)
     }
+    if (d.a2a_config) {
+      a2aConfig.value = d.a2a_config
+      a2aConfigHeaders.value = JSON.stringify(d.a2a_config.headers || {}, null, 2)
+    }
     if (d.claudecode_config) {
       // Support both old and new claudecode_config format
       if (d.claudecode_config.project_registry_id !== undefined) {
@@ -342,6 +367,13 @@ function buildFormData() {
       data.http_config = { ...httpConfig.value, headers: JSON.parse(httpConfigHeaders.value || '{}') }
     } catch {
       throw new Error('Headers JSON 格式错误')
+    }
+  }
+  if (form.value.agent_type === 'a2a') {
+    try {
+      data.a2a_config = { ...a2aConfig.value, headers: JSON.parse(a2aConfigHeaders.value || '{}') }
+    } catch {
+      throw new Error('A2A Headers JSON 格式错误')
     }
   }
   if (form.value.agent_type === 'claudecode') {

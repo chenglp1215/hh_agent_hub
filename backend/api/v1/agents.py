@@ -59,7 +59,8 @@ async def get_agent(agent_id: int, user=Depends(get_current_user)):
         "description": a.description, "role": a.role, "agent_type": a.agent_type,
         "llm_config": a.llm_config, "llm_config_id": a.llm_config_id,
         "http_config": a.http_config,
-        "claudecode_config": a.claudecode_config, "system_prompt": a.system_prompt,
+        "claudecode_config": a.claudecode_config,
+        "a2a_config": a.a2a_config, "system_prompt": a.system_prompt,
         "status": a.status, "knowledge_base_ids": a.knowledge_base_ids,
         "mcp_links": [{"id": ml.id, "mcp_server": {"id": ml.mcp_server.id, "name": ml.mcp_server.name}, "enabled_tools": ml.enabled_tools, "enabled": ml.enabled} for ml in mcp_links],
         "kb_links": [{"id": kl.id, "kb": {"id": kl.kb.id, "name": kl.kb.name}} for kl in kb_links],
@@ -88,6 +89,7 @@ async def create_agent(body: AgentCreate, user=Depends(get_current_user)):
         llm_config_id=body.llm_config_id,
         llm_config=body.llm_config, http_config=body.http_config,
         claudecode_config=body.claudecode_config,
+        a2a_config=body.a2a_config,
         system_prompt=body.system_prompt,
         knowledge_base_ids=body.kb_ids,
         created_by=user,
@@ -119,7 +121,7 @@ async def update_agent(agent_id: int, body: AgentUpdate, user=Depends(get_curren
 
     updatable = ["display_name", "description", "role", "agent_type",
                  "llm_config_id", "llm_config", "http_config", "claudecode_config",
-                 "system_prompt", "status"]
+                 "a2a_config", "system_prompt", "status"]
     for field in updatable:
         val = getattr(body, field, None)
         if val is not None:
@@ -217,6 +219,7 @@ async def test_agent(agent_id: int, body: AgentTestRequest, user=Depends(get_cur
             "llm_config": a.llm_config, "llm_config_id": a.llm_config_id,
             "http_config": a.http_config,
             "claudecode_config": a.claudecode_config,
+            "a2a_config": a.a2a_config,
             "system_prompt": a.system_prompt,
             "mcp_servers": mcp_servers,
             "knowledge_base_ids": a.knowledge_base_ids or [],
@@ -257,7 +260,9 @@ async def copy_agent(agent_id: int, user=Depends(get_current_user)):
         name=new_name, display_name=f"{a.display_name} (副本)" if a.display_name else None,
         description=a.description, role=a.role, agent_type=a.agent_type,
         llm_config=a.llm_config, http_config=a.http_config,
-        claudecode_config=a.claudecode_config, system_prompt=a.system_prompt,
+        claudecode_config=a.claudecode_config,
+        a2a_config=a.a2a_config,
+        system_prompt=a.system_prompt,
         knowledge_base_ids=a.knowledge_base_ids, created_by=user,
     )
 

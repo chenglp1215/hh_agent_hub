@@ -367,6 +367,8 @@ class AgentNodeFactory:
         summaries = []
         for skill in skills:
             name = skill.get("name", "")
+            # OpenAI function.name 要求 ^[a-zA-Z0-9_-]+$，净化 skill 名称
+            safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', name)
             skill_type = skill.get("skill_type", "prompt")
             content = skill.get("content", {})
 
@@ -376,7 +378,7 @@ class AgentNodeFactory:
                 summaries.append(f"- {name}: {desc[:80]}")
                 if template:
                     tools.append(_SkillTool(
-                        name=f"skill_{name}",
+                        name=f"skill_{safe_name}",
                         description=f"加载技能「{name}」的详细指导。{desc[:100]}。当需要{name}相关的专业知识时调用此工具。",
                         skill_name=name,
                         skill_content=template,
@@ -386,7 +388,7 @@ class AgentNodeFactory:
                 summaries.append(f"- {name}: 引用文件 {file_path}")
                 if file_path:
                     tools.append(_SkillTool(
-                        name=f"skill_{name}",
+                        name=f"skill_{safe_name}",
                         description=f"加载技能「{name}」中的文件内容。引用文件: {file_path}",
                         skill_name=name,
                         skill_content=f"[引用文件: {file_path}]",

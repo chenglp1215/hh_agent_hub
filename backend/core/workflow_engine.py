@@ -114,6 +114,7 @@ class WorkflowEngine:
 
             # 将前一轮 worker 的结果注入 messages，让 supervisor 感知到子代理已完成任务
             state_with_context = dict(state)
+            worker_context_injected = False
             if rounds > 0:
                 worker_outputs = []
                 for k, v in intermediate.items():
@@ -125,10 +126,17 @@ class WorkflowEngine:
                 if worker_outputs:
                     context_msg = "\n\n".join(worker_outputs)
                     msgs = list(state.get("messages", []))
-                    msgs.append({"role": "system", "content": f"以下子代理已完成任务，请根据返回结果判断是否已满足用户需求：\n\n{context_msg}"})
+                    msgs.append({"role": "user", "content": f"以下子代理已完成任务，请根据返回结果判断是否已满足用户需求：\n\n{context_msg}"})
                     state_with_context["messages"] = msgs
+                    worker_context_injected = True
 
             result = await supervisor_node(state_with_context)
+            # 清理注入的上下文消息，防止持久化到 session.messages 污染后续对话
+            if worker_context_injected:
+                out_msgs = result.get("messages", [])
+                if out_msgs:
+                    result["messages"] = [m for m in out_msgs
+                        if m.content != f"以下子代理已完成任务，请根据返回结果判断是否已满足用户需求：\n\n{context_msg}"]
             trace = result.get("trace") or trace
             intermediate = result.get("intermediate_results") or {}
             intermediate["_supervisor_rounds"] = rounds + 1

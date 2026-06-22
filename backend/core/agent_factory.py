@@ -1,3 +1,4 @@
+import re
 import json
 import asyncio
 from typing import Dict, Any, List, Optional
@@ -289,12 +290,18 @@ class AgentNodeFactory:
                 # 转换为 LangChain BaseTool
                 for t in raw_tools:
                     t_name = t["name"]
+                    # OpenAI function.name 要求 ^[a-zA-Z0-9_-]+$，净化非法字符
+                    safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', t_name)
+                    if safe_name != t_name:
+                        logger.info(
+                            f"MCP tool name sanitized: '{t_name}' -> '{safe_name}'"
+                        )
                     if enabled_tools and t_name not in enabled_tools:
                         continue
                     input_schema = t.get("inputSchema", {})
-                    args_schema = _build_args_schema(input_schema, t_name)
+                    args_schema = _build_args_schema(input_schema, safe_name)
                     tools.append(_MCPTool(
-                        name=t_name,
+                        name=safe_name,
                         description=t.get("description", ""),
                         args_schema=args_schema,
                         server_id=server_id,

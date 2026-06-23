@@ -8,7 +8,7 @@
 Job ID 约定: "trigger_{trigger_id}" (如 "trigger_1")
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -167,14 +167,18 @@ async def _trigger_execute(trigger_id: int):
     logger.info(f"Trigger {trigger_id} executed, task_id={task_id}, session_id={session_id}")
 
 
+BEIJING_TZ = timezone(timedelta(hours=8))
+
+
 def _get_job_next_run_time(trigger_id: int) -> Optional[datetime]:
-    """获取 job 的下次运行时间"""
+    """获取 job 的下次运行时间（转换为北京时间 naive datetime）"""
     global _scheduler
     if not _scheduler:
         return None
     job = _scheduler.get_job(f"trigger_{trigger_id}")
     if job and job.next_run_time:
-        return job.next_run_time
+        # APScheduler 返回 UTC aware datetime，转为北京时间 naive datetime
+        return job.next_run_time.astimezone(BEIJING_TZ).replace(tzinfo=None)
     return None
 
 
@@ -201,9 +205,9 @@ async def _register_job(trigger) -> Optional[Job]:
         misfire_grace_time=60,
     )
 
-    # 更新 next_fire_at
+    # 更新 next_fire_at（转为北京时间 naive datetime）
     if job and job.next_run_time:
-        trigger.next_fire_at = job.next_run_time
+        trigger.next_fire_at = job.next_run_time.astimezone(BEIJING_TZ).replace(tzinfo=None)
         await trigger.save(update_fields=["next_fire_at"])
 
     logger.info(f"Registered job {job_id} for trigger '{trigger.name}'")

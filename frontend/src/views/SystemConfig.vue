@@ -78,10 +78,14 @@
           </a-space>
         </a-form-item>
       </a-form>
-      <a-alert type="info" show-icon>
+      <a-alert v-if="wecomBotStatus === 'configured'" type="success" show-icon>
         <template #message>
-          <div>配置后 wecom-bot 容器将自动连接企微智能机器人。</div>
-          <div>如需修改配置，保存后需重启 wecom-bot 容器：<code>docker compose restart wecom-bot</code></div>
+          <div>已配置，wecom-bot 容器将自动连接企微智能机器人。</div>
+        </template>
+      </a-alert>
+      <a-alert v-else type="info" show-icon>
+        <template #message>
+          <div>请填写 Bot ID 和 Bot Secret 后保存，wecom-bot 容器将自动连接。</div>
         </template>
       </a-alert>
     </a-card>
@@ -116,7 +120,8 @@ const wecomForm = reactive({
 const wecomSaving = ref(false)
 const wecomBotStatus = computed(() => {
   const id = configs.value.find((c: any) => c.config_key === 'wecom.bot_id')
-  return id && id.config_value && id.config_value !== '***' ? 'configured' : 'unconfigured'
+  // secret 类型返回 "***" 也算已配置；空字符串表示未配置
+  return id && id.config_value && id.config_value !== '' ? 'configured' : 'unconfigured'
 })
 
 async function saveWecomConfig() {
@@ -136,12 +141,11 @@ async function saveWecomConfig() {
       config_type: 'secret',
       description: '企微智能机器人 Bot Secret',
     })
-    message.success('保存成功，请重启 wecom-bot 容器使配置生效')
-    // 刷新配置列表
+    message.success('保存成功，wecom-bot 容器将自动重连')
+    // 刷新配置列表并回填 ***
     const res = await client.get('/configs')
     configs.value = res.data.data || []
-    wecomForm.bot_id = ''
-    wecomForm.bot_secret = ''
+    fillWecomForm()
   } catch (e: any) {
     message.error(e.response?.data?.message || '保存失败')
   } finally {
@@ -149,10 +153,19 @@ async function saveWecomConfig() {
   }
 }
 
+function fillWecomForm() {
+  const idVal = configs.value.find((c: any) => c.config_key === 'wecom.bot_id')?.config_value || ''
+  const secretVal = configs.value.find((c: any) => c.config_key === 'wecom.bot_secret')?.config_value || ''
+  // secret 类型返回 "***"，直接显示在输入框中
+  wecomForm.bot_id = idVal
+  wecomForm.bot_secret = secretVal
+}
+
 onMounted(async () => {
   try {
     const res = await client.get('/configs')
     configs.value = res.data.data || []
+    fillWecomForm()
   } catch {}
 })
 </script>

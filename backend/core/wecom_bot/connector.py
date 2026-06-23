@@ -1,10 +1,10 @@
 """企微机器人 WS 连接器 — 生命周期管理
 
 职责：
-1. 从 SysConfig 读取 WECOM_BOT_ID / WECOM_BOT_SECRET
+1. 从 SysConfig 读取 wecom.bot_id / wecom.bot_secret
 2. 创建 WSClient 并连接
 3. 注册消息回调到 WecomBotBridge
-4. 监听 Redis pub/sub 刷新触发器映射
+4. 监听 Redis pub/sub 刷新触发器映射和凭证
 """
 
 import asyncio
@@ -49,7 +49,16 @@ class WecomBotConnector:
         self._bridge = WecomBotBridge(self._redis)
         await self._bridge.load_mappings()
 
-        # 创建 WSClient
+        # 连接 WS
+        await self._connect_ws(bot_id, bot_secret)
+
+        # 启动 Redis pub/sub 监听
+        asyncio.create_task(self._listen_refresh())
+
+        logger.info("WecomBotConnector started successfully")
+
+    async def _connect_ws(self, bot_id: str, bot_secret: str):
+        """创建并连接 WSClient"""
         options = WSClientOptions(
             bot_id=bot_id,
             secret=bot_secret,
@@ -63,21 +72,15 @@ class WecomBotConnector:
         self._ws_client.on("error", self._on_error)
         self._ws_client.on("disconnected", self._on_disconnected)
 
-        # 连接
         self._running = True
         await self._ws_client.connect()
-
-        # 启动 Redis pub/sub 监听
-        asyncio.create_task(self._listen_refresh())
-
-        logger.info("WecomBotConnector started successfully")
 
     async def _load_credentials(self):
         """从数据库加载凭证"""
         from models.sys_config import SysConfig
 
-        bot_id_config = await SysConfig.get_or_none(config_key="WECOM_BOT_ID")
-        bot_secret_config = await SysConfig.get_or_none(config_key="WECOM_BOT_SECRET")
+        bot_id_config = await SysConfig.get_or_none(config_key="wecom.bot_id")
+        bot_secret_config = await SysConfig.get_or_none(config_key="wecom.bot_secret")
 
         bot_id = bot_id_config.config_value if bot_id_config else ""
         bot_secret = bot_secret_config.config_value if bot_secret_config else ""
@@ -93,6 +96,21 @@ class WecomBotConnector:
                 logger.info("Wecom bot credentials found!")
                 return bot_id, bot_secret
             logger.debug("Still waiting for wecom bot credentials...")
+
+    async def _reconnect_with_new_credentials(self):
+        """断开当前连接，用新凭证重新连接"""
+        logger.info("Reconnecting with new credentials...")
+        if self._ws_client:
+            self._ws_client.disconnect()
+            self._ws_client = None
+
+        bot_id, bot_secret = await self._load_credentials()
+        if not bot_id or not bot_secret:
+            logger.warning("New credentials are empty, entering retry loop...")
+            bot_id, bot_secret = await self._wait_for_credentials()
+
+        await self._connect_ws(bot_id, bot_secret)
+        logger.info("Reconnected with new credentials")
 
     def _on_authenticated(self):
         """认证成功回调"""
@@ -112,9 +130,9 @@ class WecomBotConnector:
         logger.warning(f"Wecom bot disconnected: {reason}")
 
     async def _listen_refresh(self):
-        """监听 Redis pub/sub 刷新触发器映射"""
+        """监听 Redis pub/sub 刷新触发器映射和凭证"""
         pubsub = self._redis.pubsub()
-        await pubsub.subscribe("wecom_bot:refresh")
+        await pubsub.subscribe("wecom_bot:refresh", "wecom_bot:credentials_refresh")
 
         try:
             while self._running:
@@ -122,12 +140,16 @@ class WecomBotConnector:
                     timeout=1.0, ignore_subscribe_messages=True
                 )
                 if message and message.get("type") == "message":
-                    if self._bridge:
-                        await self._bridge.refresh_mappings()
+                    channel = message.get("channel", "")
+                    if channel == "wecom_bot:credentials_refresh":
+                        await self._reconnect_with_new_credentials()
+                    elif channel == "wecom_bot:refresh":
+                        if self._bridge:
+                            await self._bridge.refresh_mappings()
         except asyncio.CancelledError:
             pass
         finally:
-            await pubsub.unsubscribe("wecom_bot:refresh")
+            await pubsub.unsubscribe("wecom_bot:refresh", "wecom_bot:credentials_refresh")
             await pubsub.close()
 
     async def stop(self):

@@ -781,6 +781,46 @@ h1, h2, h3, h4, h5, h6 { color: var(--text-primary) !important; }
 /* ---- Alert ---- */
 .ant-alert {
   border-radius: var(--radius-md) !important;
+  background: var(--surface-1) !important;
+  border: 1px solid var(--border) !important;
+}
+.ant-alert .ant-alert-message,
+.ant-alert .ant-alert-description {
+  color: var(--text-primary) !important;
+}
+.ant-alert .ant-alert-icon {
+  color: var(--text-secondary) !important;
+}
+.ant-alert-info {
+  border-color: rgba(94, 106, 210, 0.3) !important;
+}
+.ant-alert-info .ant-alert-icon {
+  color: var(--accent) !important;
+}
+.ant-alert-success {
+  border-color: rgba(82, 196, 26, 0.3) !important;
+}
+.ant-alert-success .ant-alert-icon {
+  color: #52c41a !important;
+}
+.ant-alert-warning {
+  border-color: rgba(250, 173, 20, 0.3) !important;
+}
+.ant-alert-warning .ant-alert-icon {
+  color: #faad14 !important;
+}
+.ant-alert-error {
+  border-color: rgba(255, 77, 79, 0.3) !important;
+}
+.ant-alert-error .ant-alert-icon {
+  color: #ff4d4f !important;
+}
+.ant-alert code {
+  background: var(--surface-2) !important;
+  color: var(--accent) !important;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
 }
 
 /* ---- Upload ---- */

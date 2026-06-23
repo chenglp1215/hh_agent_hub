@@ -1,10 +1,22 @@
 from fastapi import APIRouter, Depends
+from loguru import logger
 from models.sys_config import SysConfig
 from schemas.sys_config import SysConfigUpdate
 from api.deps import require_admin
 from utils.response import success, error
 
 router = APIRouter(prefix="/configs", tags=["系统配置"])
+
+
+async def _publish_wecom_credentials_refresh():
+    """通知 wecom-bot 重新加载凭证"""
+    try:
+        from core.task_queue import get_task_queue
+        tq = get_task_queue()
+        await tq.connect()
+        await tq._redis.publish("wecom_bot:credentials_refresh", "refresh")
+    except Exception as e:
+        logger.warning(f"Failed to publish wecom credentials refresh: {e}")
 
 
 @router.get("")
@@ -31,4 +43,9 @@ async def update_config(key: str, body: SysConfigUpdate, _=Depends(require_admin
     if body.description is not None:
         config.description = body.description
     await config.save()
+
+    # 更新 wecom 凭证时通知 wecom-bot 重连
+    if key in ("wecom.bot_id", "wecom.bot_secret"):
+        await _publish_wecom_credentials_refresh()
+
     return success(message="配置已更新")

@@ -2,9 +2,23 @@
   <div>
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold">触发器管理</h1>
-      <a-button type="primary" @click="$router.push('/triggers/create')">
-        <PlusOutlined /> 创建触发器
-      </a-button>
+      <a-space>
+        <a-dropdown>
+          <template #overlay>
+            <a-menu @click="handleCreateMenu">
+              <a-menu-item key="schedule">
+                <ClockCircleOutlined /> 定时触发器
+              </a-menu-item>
+              <a-menu-item key="wecom_bot">
+                <RobotOutlined /> 企微机器人触发器
+              </a-menu-item>
+            </a-menu>
+          </template>
+          <a-button type="primary">
+            <PlusOutlined /> 创建触发器
+          </a-button>
+        </a-dropdown>
+      </a-space>
     </div>
 
     <a-table :dataSource="triggers" :columns="columns" rowKey="id" :loading="loading">
@@ -134,7 +148,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { PlusOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, ClockCircleOutlined, RobotOutlined } from '@ant-design/icons-vue'
 import { formatTime } from '@/utils/time'
 import { triggersApi } from '@/api/triggers'
 import { chatLogsApi } from '@/api/chatLogs'
@@ -154,6 +168,17 @@ const columns = [
   { title: '下次触发', key: 'next_fire_at' },
   { title: '操作', key: 'actions', width: 360 },
 ]
+
+import { useRouter } from 'vue-router'
+const router = useRouter()
+
+function handleCreateMenu({ key }: { key: string }) {
+  if (key === 'wecom_bot') {
+    router.push('/triggers/create-wecom-bot')
+  } else {
+    router.push('/triggers/create')
+  }
+}
 
 function triggerTypeColor(type: string) {
   const map: Record<string, string> = {

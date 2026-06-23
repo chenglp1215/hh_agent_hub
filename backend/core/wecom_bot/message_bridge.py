@@ -71,16 +71,18 @@ class WecomBotBridge:
         chatid = from_info.get("chatid", "")
         userid = from_info.get("userid", "")
 
+        logger.info(f"Received message: msgtype={msgtype}, chatid={chatid}, userid={userid}")
+
         # 非文本消息，回复提示
         if msgtype != "text":
-            if chatid:
-                await ws_client.send_message(chatid, {
-                    "msgtype": "text",
-                    "text": {"content": "Currently only text messages are supported"},
-                })
+            reply_target = chatid or userid
+            if reply_target:
+                await self._reply_text(ws_client, frame, chatid, userid,
+                    "暂仅支持文本消息")
             return
 
         content = body.get("text", {}).get("content", "").strip()
+        logger.info(f"Text content: {content}")
 
         # 检查是否是验证码
         if await self._check_verification_code(content, chatid, userid, frame, ws_client):
@@ -89,13 +91,31 @@ class WecomBotBridge:
         # 正常消息路由
         await self._route_message(content, chatid, userid, frame, ws_client)
 
+    async def _reply_text(self, ws_client, frame, chatid, userid, text):
+        """统一回复文本消息"""
+        if chatid:
+            await ws_client.send_message(chatid, {
+                "msgtype": "text",
+                "text": {"content": text},
+            })
+        else:
+            await ws_client.reply_stream(frame, str(uuid.uuid4()), text, finish=True)
+
     async def _check_verification_code(
         self, content: str, chatid: str, userid: str,
         frame: Dict[str, Any], ws_client
     ) -> bool:
         """检查消息是否匹配验证码"""
+        # 验证码格式：6位大写字母+数字，先做基本格式检查
+        if len(content) != 6 or not content.isalnum():
+            logger.debug(f"Content '{content}' is not verification code format (len={len(content)})")
+            return False
+
         # 检查 Redis 中是否有匹配的验证码
-        bind_data = await self._redis.get(f"wecom_bind:{content}")
+        redis_key = f"wecom_bind:{content}"
+        bind_data = await self._redis.get(redis_key)
+        logger.info(f"Checking verification code '{content}': redis_key={redis_key}, found={bool(bind_data)}")
+
         if not bind_data:
             return False
 
@@ -111,18 +131,13 @@ class WecomBotBridge:
         )
 
         # 删除验证码（一次性使用）
-        await self._redis.delete(f"wecom_bind:{content}")
+        await self._redis.delete(redis_key)
 
-        logger.info(f"Verification code {content} bound to {chat_type}:{chat_id}")
+        logger.info(f"Verification code '{content}' bound to {chat_type}:{chat_id}")
 
         # 回复确认消息
-        if chatid:
-            await ws_client.send_message(chatid, {
-                "msgtype": "text",
-                "text": {"content": f"Binding successful! Chat ID: {chat_id}"},
-            })
-        else:
-            await ws_client.reply_stream(frame, str(uuid.uuid4()), "Binding successful!", finish=True)
+        await self._reply_text(ws_client, frame, chatid, userid,
+            f"绑定成功！\n聊天类型: {'群聊' if chat_type == 'group' else '私聊'}\n聊天ID: {chat_id}")
 
         return True
 
@@ -139,11 +154,16 @@ class WecomBotBridge:
             trigger_info = self._trigger_map.get(("user", userid))
 
         if not trigger_info:
-            logger.debug(f"No trigger match for chatid={chatid}, userid={userid}")
+            logger.info(f"No trigger match for chatid={chatid}, userid={userid}, sending help message")
+            await self._reply_text(ws_client, frame, chatid, userid,
+                "该聊天尚未绑定应用触发器。\n\n"
+                "请在管理平台创建企微机器人触发器并完成绑定后，再发送消息。")
             return
 
         if not trigger_info.get("app_enabled"):
             logger.warning(f"Trigger {trigger_info['id']} app is disabled")
+            await self._reply_text(ws_client, frame, chatid, userid,
+                "关联的应用已禁用，请联系管理员。")
             return
 
         logger.info(f"Message matched trigger {trigger_info['id']} ({trigger_info['name']})")
@@ -192,6 +212,14 @@ class WecomBotBridge:
             source="auto",
             status="submitted",
         )
+
+        logger.info(f"Workflow enqueued: trigger={trigger_id}, task={task_id}, session={session_id}")
+
+        # 先回复"正在思考"
+        await self._reply_text(ws_client, frame,
+            frame.get("body", {}).get("from", {}).get("chatid", ""),
+            frame.get("body", {}).get("from", {}).get("userid", ""),
+            "正在思考...")
 
         # 订阅流式事件并回复
         accumulated = ""

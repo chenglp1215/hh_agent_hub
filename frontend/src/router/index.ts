@@ -26,6 +26,7 @@ const router = createRouter({
         // Trigger management
         { path: 'triggers', name: 'TriggerList', component: () => import('@/views/TriggerList.vue'), meta: { title: '触发器管理' } },
         { path: 'triggers/create', name: 'TriggerCreate', component: () => import('@/views/TriggerEditor.vue'), meta: { title: '创建触发器' } },
+        { path: 'triggers/create-wecom-bot', name: 'WecomBotTriggerCreate', component: () => import('@/views/WecomBotTriggerCreate.vue'), meta: { title: '创建企微机器人触发器' } },
         { path: 'triggers/:id/edit', name: 'TriggerEdit', component: () => import('@/views/TriggerEditor.vue'), meta: { title: '编辑触发器' }, props: true },
         // Notification channels
         { path: 'notifications', name: 'NotificationList', component: () => import('@/views/NotificationList.vue'), meta: { title: '通知管理' } },

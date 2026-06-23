@@ -40,7 +40,7 @@ class TriggerCreate(BaseModel):
     interval_unit: Optional[IntervalUnitEnum] = None
     cron_expression: Optional[str] = Field(None, max_length=100)
     app_id: int
-    message: str = Field(..., min_length=1)
+    message: str = Field("", min_length=0)
     notification_id: Optional[int] = None
     # wecom_bot fields
     wecom_chat_type: Optional[WecomChatTypeEnum] = None

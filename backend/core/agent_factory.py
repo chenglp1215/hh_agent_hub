@@ -236,6 +236,11 @@ class AgentNodeFactory:
             )
             output = last_message.content if last_message else ""
 
+            # 提取 token 使用量
+            task_id = state.get("task_id", "")
+            if task_id and last_message:
+                self._extract_token_usage(last_message, task_id, llm)
+
             # 聚合中间结果
             intermediate = state.get("intermediate_results", {})
             intermediate[agent_name] = output
@@ -253,6 +258,51 @@ class AgentNodeFactory:
             }
 
         return agent_node
+
+    def _extract_token_usage(self, message, task_id: str, llm):
+        """从 AIMessage 中提取 token 使用量"""
+        from core.token_tracker import record_token_usage
+        model_name = None
+
+        # 从 LLM 获取 model_name
+        if hasattr(llm, 'model'):
+            model_name = llm.model
+        elif hasattr(llm, 'model_name'):
+            model_name = llm.model_name
+
+        # 方法1: usage_metadata（LangChain 标准）
+        um = getattr(message, 'usage_metadata', None)
+        if um:
+            pt = getattr(um, 'input_tokens', 0) or 0
+            ct = getattr(um, 'output_tokens', 0) or 0
+            tt = getattr(um, 'total_tokens', 0) or 0
+            if pt or ct or tt:
+                record_token_usage(task_id, pt, ct, tt, model_name)
+                return
+
+        # 方法2: response_metadata.usage（OpenAI 兼容）
+        rm = getattr(message, 'response_metadata', None)
+        if rm:
+            usage = rm.get('usage', {})
+            if usage and (usage.get('prompt_tokens', 0) or usage.get('total_tokens', 0)):
+                record_token_usage(
+                    task_id,
+                    usage.get('prompt_tokens', 0) or 0,
+                    usage.get('completion_tokens', 0) or 0,
+                    usage.get('total_tokens', 0) or 0,
+                    model_name or rm.get('model_name'),
+                )
+                return
+
+        # 方法3: tiktoken 估算
+        try:
+            import tiktoken
+            enc = tiktoken.get_encoding("cl100k_base")
+            ct = len(enc.encode(message.content or ""))
+            if ct:
+                record_token_usage(task_id, 0, ct, ct, model_name)
+        except Exception:
+            pass
 
     async def _load_mcp_tools(self, mcp_servers: List[Dict[str, Any]]) -> List[BaseTool]:
         """连接 MCP Server 并发现可用工具，转换为 LangChain BaseTool 列表

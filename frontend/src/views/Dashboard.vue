@@ -155,6 +155,7 @@ const loading = ref(false)
 const stats = ref({
   agents: 0, workflows: 0, apps: 0, today_executions: 0,
   mcp_online: 0, mcp_total: 0, kb_count: 0, skill_count: 0,
+  queue_depth: 0, active_tasks: 0, worker_count: 0,
 })
 const recentLogs = ref<any[]>([])
 
@@ -202,6 +203,9 @@ const statCards = computed(() => [
 ])
 
 const resourceItems = computed(() => [
+  { key: 'workers', label: 'Worker 在线', value: stats.value.worker_count, color: stats.value.worker_count > 0 ? '#00e676' : '#ff3d4f' },
+  { key: 'queue', label: '队列排队', value: stats.value.queue_depth, color: stats.value.queue_depth > 5 ? '#f0a500' : '#00e676' },
+  { key: 'active', label: '执行中任务', value: stats.value.active_tasks, color: '#00d4ff' },
   { key: 'mcp', label: `MCP Server (${stats.value.mcp_online}/${stats.value.mcp_total})`, value: stats.value.mcp_online > 0 ? '在线' : '离线', color: stats.value.mcp_online > 0 ? '#00e676' : '#ff3d4f' },
   { key: 'kb', label: '知识库', value: stats.value.kb_count, color: '#00d4ff' },
   { key: 'skills', label: 'Skill 模板', value: stats.value.skill_count, color: '#f0a500' },
@@ -233,6 +237,9 @@ onMounted(async () => {
       mcp_total: d.mcp_total || 0,
       kb_count: d.kb_count || 0,
       skill_count: d.skill_count || 0,
+      queue_depth: d.queue_depth || 0,
+      active_tasks: d.active_tasks || 0,
+      worker_count: d.worker_count || 0,
     }
     recentLogs.value = d.recent_logs || []
   } catch {

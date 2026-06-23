@@ -81,6 +81,31 @@ async def get_dashboard_stats(user=Depends(get_current_user)):
     # Recent chat logs (last 10)
     recent_logs = await ChatLog.all().order_by('-created_at').limit(10)
 
+    # Task queue status
+    queue_depth = 0
+    active_tasks = 0
+    try:
+        from core.task_queue import get_task_queue
+        tq = get_task_queue()
+        await tq.connect()
+        queue_depth = await tq._redis.llen("workflow:queue")
+        # 统计活跃任务（有 result key 的是正在执行的）
+        result_keys = await tq._redis.keys("workflow:result:*")
+        active_tasks = len(result_keys)
+    except Exception:
+        pass
+
+    # Worker 状态（检查 worker heartbeat）
+    worker_count = 0
+    try:
+        from core.task_queue import get_task_queue
+        tq = get_task_queue()
+        await tq.connect()
+        worker_keys = await tq._redis.keys("worker:heartbeat:*")
+        worker_count = len(worker_keys)
+    except Exception:
+        pass
+
     return success(data={
         "agents": agent_count,
         "workflows": workflow_count,
@@ -90,6 +115,9 @@ async def get_dashboard_stats(user=Depends(get_current_user)):
         "mcp_total": mcp_total,
         "kb_count": kb_count,
         "skill_count": skill_count,
+        "queue_depth": queue_depth,
+        "active_tasks": active_tasks,
+        "worker_count": worker_count,
         "recent_logs": [
             {
                 "id": log.id,

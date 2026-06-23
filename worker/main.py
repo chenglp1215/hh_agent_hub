@@ -25,9 +25,28 @@ from core.task_queue import TaskQueue, get_task_queue
 from core.session_manager import session_manager
 
 
+import uuid
+
+WORKER_ID = f"worker_{uuid.uuid4().hex[:8]}"
+
+
+async def heartbeat_loop(task_queue: TaskQueue):
+    """每 10 秒写一次心跳到 Redis"""
+    while True:
+        try:
+            await task_queue._redis.set(f"worker:heartbeat:{WORKER_ID}", "1", ex=30)
+        except Exception:
+            pass
+        await asyncio.sleep(10)
+
+
 async def on_shutdown():
     logger.info("Worker shutting down, closing connections...")
     tq = get_task_queue()
+    try:
+        await tq._redis.delete(f"worker:heartbeat:{WORKER_ID}")
+    except Exception:
+        pass
     await tq.disconnect()
     await Tortoise.close_connections()
 
@@ -83,6 +102,10 @@ async def main():
     cleanup_task = asyncio.create_task(session_manager.start_cleanup_task(600))
     logger.info("[Task] Session workspace cleanup started (interval=600s)")
 
+    # Task 3: Worker 心跳（每 10 秒）
+    hb_task = asyncio.create_task(heartbeat_loop(task_queue))
+    logger.info(f"[Task] Worker heartbeat started (id={WORKER_ID})")
+
     # ── 等待退出信号 ──
     stop_event = asyncio.Event()
 
@@ -103,6 +126,7 @@ async def main():
     # ── 清理 ──
     consumer_task.cancel()
     cleanup_task.cancel()
+    hb_task.cancel()
     await on_shutdown()
     logger.info("Worker stopped")
 

@@ -28,9 +28,11 @@ class SessionManager:
     async def create_workspace(self, session_id: str) -> str:
         """创建 session workspace 目录结构"""
         ws = self.get_session_path(session_id)
-        os.makedirs(ws / "projects", exist_ok=True, mode=0o777)
-        os.makedirs(ws / "agents", exist_ok=True, mode=0o777)
-        os.chmod(str(ws), 0o777)
+        os.makedirs(ws / "projects", exist_ok=True)
+        os.makedirs(ws / "agents", exist_ok=True)
+        # 设置 777 权限，允许 worker (appuser) 写入
+        for d in [str(ws), str(ws / "projects"), str(ws / "agents")]:
+            os.chmod(d, 0o777)
         logger.info(f"Session workspace created: {ws}")
         return str(ws)
 
@@ -45,7 +47,8 @@ class SessionManager:
     def ensure_agent_workspace(self, session_id: str, agent_name: str) -> str:
         """确保 agent 工作区目录存在并返回路径"""
         path = self.get_agent_workspace_path(session_id, agent_name)
-        os.makedirs(path, exist_ok=True, mode=0o777)
+        os.makedirs(path, exist_ok=True)
+        os.chmod(path, 0o777)
         return path
 
     async def cleanup_workspace(self, session_id: str):

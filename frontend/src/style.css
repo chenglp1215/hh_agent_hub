@@ -69,8 +69,24 @@ body {
 }
 
 /* Default heading & text colors for dark theme */
-h1, h2, h3, h4, h5, h6 { color: var(--text-primary); }
-p, span, div, li, td, th, label, dt, dd { color: inherit; }
+h1, h2, h3, h4, h5, h6 { color: var(--text-primary) !important; }
+
+/* Text color overrides — Tailwind text-[#...] not generated in v4 */
+.ant-card-body h1, .ant-card-body h2, .ant-card-body h3, .ant-card-body h4,
+.ant-card-body h5, .ant-card-body h6, .ant-card-body p, .ant-card-body span,
+.ant-card-body div, .ant-card-body li, .ant-card-body td, .ant-card-body th,
+.ant-card-body code, .ant-card-body pre,
+.ant-modal-body h1, .ant-modal-body h2, .ant-modal-body h3, .ant-modal-body h4,
+.ant-modal-body h5, .ant-modal-body h6, .ant-modal-body p, .ant-modal-body span,
+.ant-modal-body div, .ant-modal-body li, .ant-modal-body td, .ant-modal-body th,
+.ant-drawer-body h1, .ant-drawer-body h2, .ant-drawer-body h3, .ant-drawer-body h4,
+.ant-drawer-body h5, .ant-drawer-body h6, .ant-drawer-body p, .ant-drawer-body span,
+.ant-drawer-body div, .ant-drawer-body li, .ant-drawer-body td, .ant-drawer-body th,
+.ant-descriptions-item-content,
+.ant-statistic-content-value { color: var(--text-primary) !important; }
+
+/* Muted/secondary text — preserve intended dim colors */
+.ant-descriptions-item-label { color: var(--text-muted) !important; }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {

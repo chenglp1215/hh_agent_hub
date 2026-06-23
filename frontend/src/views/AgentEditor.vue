@@ -5,7 +5,7 @@
     <a-card class="max-w-3xl">
       <a-form :model="form" layout="vertical" @finish="handleSubmit">
         <!-- Basic Info -->
-        <h3 class="text-lg font-semibold mb-4 text-[#5e6ad2]">基础信息</h3>
+        <h3 class="text-lg font-semibold mb-4 text-[#00d4ff]">基础信息</h3>
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="名称" name="name" :rules="[{ required: true, message: '请输入名称' }]">
@@ -54,7 +54,7 @@
 
         <!-- LLM Config (local agent) -->
         <template v-if="form.agent_type === 'local'">
-          <h3 class="text-lg font-semibold mb-4 mt-4 text-[#5e6ad2]">LLM 配置</h3>
+          <h3 class="text-lg font-semibold mb-4 mt-4 text-[#00d4ff]">LLM 配置</h3>
 
           <a-form-item label="选择系统配置">
             <a-radio-group v-model:value="llmMode" button-style="solid">
@@ -120,7 +120,7 @@
 
         <!-- HTTP Config -->
         <template v-if="form.agent_type === 'http'">
-          <h3 class="text-lg font-semibold mb-4 mt-4 text-[#5e6ad2]">HTTP 配置</h3>
+          <h3 class="text-lg font-semibold mb-4 mt-4 text-[#00d4ff]">HTTP 配置</h3>
           <a-form-item label="Base URL" name="http_base_url" :rules="[{ required: true, message: '请输入 Base URL' }]">
             <a-input v-model:value="httpConfig.base_url" placeholder="http://external-agent:8080" />
           </a-form-item>
@@ -137,7 +137,7 @@
 
         <!-- A2A Config -->
         <template v-if="form.agent_type === 'a2a'">
-          <h3 class="text-lg font-semibold mb-4 mt-4 text-[#5e6ad2]">A2A 对端配置</h3>
+          <h3 class="text-lg font-semibold mb-4 mt-4 text-[#00d4ff]">A2A 对端配置</h3>
           <a-form-item label="Agent Card URL" required>
             <a-input v-model:value="a2aConfig.agent_card_url" placeholder="http://peer-agent:8080/api/v1/mdr_log_analyze_mcp/a2a/agent-card.json" />
           </a-form-item>
@@ -151,7 +151,7 @@
 
         <!-- Claude Code Config -->
         <template v-if="form.agent_type === 'claudecode'">
-          <h3 class="text-lg font-semibold mb-4 mt-4 text-[#5e6ad2]">Claude Code 配置</h3>
+          <h3 class="text-lg font-semibold mb-4 mt-4 text-[#00d4ff]">Claude Code 配置</h3>
 
           <a-form-item label="关联项目">
             <a-select
@@ -178,13 +178,13 @@
         </template>
 
         <!-- System Prompt -->
-        <h3 class="text-lg font-semibold mb-4 mt-4 text-[#5e6ad2]">System Prompt</h3>
+        <h3 class="text-lg font-semibold mb-4 mt-4 text-[#00d4ff]">System Prompt</h3>
         <a-form-item>
           <a-textarea v-model:value="form.system_prompt" :rows="6" placeholder="你是..." />
         </a-form-item>
 
         <!-- Resource Selection -->
-        <h3 class="text-lg font-semibold mb-4 mt-4 text-[#5e6ad2]">资源目录选择</h3>
+        <h3 class="text-lg font-semibold mb-4 mt-4 text-[#00d4ff]">资源目录选择</h3>
         <McpServerSelector v-model="selectedMcpServers" />
         <KnowledgeBaseSelector v-model="selectedKbIds" class="mt-4" />
         <SkillsSelector v-model="selectedSkillIds" class="mt-4" />

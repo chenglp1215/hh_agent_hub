@@ -25,7 +25,7 @@
             </div>
             <div class="stat-info">
               <span class="stat-label">{{ card.label }}</span>
-              <span class="stat-value" :class="card.valueClass">
+              <span class="stat-value" :style="{ color: card.color }">
                 <AnimatedCounter :target="card.value" :duration="1200" :delay="i * 100 + 300" />
               </span>
             </div>
@@ -162,28 +162,28 @@ const statCards = computed(() => [
     icon: RobotOutlined, to: '/agents',
     gradient: 'linear-gradient(135deg, #00d4ff, #0088cc)',
     glow: '0 0 16px rgba(0,212,255,0.3)',
-    valueClass: 'text-[#00d4ff]',
+    color: '#00d4ff',
   },
   {
     key: 'workflows', label: '工作流总数', value: stats.value.workflows,
     icon: ApartmentOutlined, to: '/workflows',
     gradient: 'linear-gradient(135deg, #7c5cfc, #5b3ecc)',
     glow: '0 0 16px rgba(124,92,252,0.3)',
-    valueClass: 'text-[#9b7cfc]',
+    color: '#9b7cfc',
   },
   {
     key: 'apps', label: '应用总数', value: stats.value.apps,
     icon: AppstoreOutlined, to: '/apps',
     gradient: 'linear-gradient(135deg, #00e676, #00b34d)',
     glow: '0 0 16px rgba(0,230,118,0.3)',
-    valueClass: 'text-[#00e676]',
+    color: '#00e676',
   },
   {
     key: 'executions', label: '今日执行', value: stats.value.today_executions,
     icon: ThunderboltOutlined, to: null,
     gradient: 'linear-gradient(135deg, #f0a500, #cc8800)',
     glow: '0 0 16px rgba(240,165,0,0.3)',
-    valueClass: 'text-[#f0a500]',
+    color: '#f0a500',
   },
 ])
 

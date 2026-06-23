@@ -74,9 +74,28 @@ async def get_dashboard_stats(user=Depends(get_current_user)):
         status="active", last_checked_at__gte=five_min_ago
     ).count()
 
-    # Today's executions (使用 ChatLog，北京时间零点)
+    # Today's executions and token usage (北京时间零点)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_executions = await ChatLog.filter(created_at__gte=today_start).count()
+
+    # 今日 token 消耗（总计 + 按模型分组）
+    from tortoise.functions import Sum
+    today_logs = await ChatLog.filter(
+        created_at__gte=today_start, total_tokens__gt=0
+    ).all()
+    today_total_tokens = sum(t.total_tokens or 0 for t in today_logs)
+    today_prompt_tokens = sum(t.prompt_tokens or 0 for t in today_logs)
+    today_completion_tokens = sum(t.completion_tokens or 0 for t in today_logs)
+
+    # 按模型分组统计
+    token_by_model: dict = {}
+    for t in today_logs:
+        model = t.model_name or "unknown"
+        if model not in token_by_model:
+            token_by_model[model] = {"prompt": 0, "completion": 0, "total": 0}
+        token_by_model[model]["prompt"] += t.prompt_tokens or 0
+        token_by_model[model]["completion"] += t.completion_tokens or 0
+        token_by_model[model]["total"] += t.total_tokens or 0
 
     # Recent chat logs (last 10)
     recent_logs = await ChatLog.all().order_by('-created_at').limit(10)
@@ -118,6 +137,12 @@ async def get_dashboard_stats(user=Depends(get_current_user)):
         "queue_depth": queue_depth,
         "active_tasks": active_tasks,
         "worker_count": worker_count,
+        "today_tokens": {
+            "prompt": today_prompt_tokens,
+            "completion": today_completion_tokens,
+            "total": today_total_tokens,
+        },
+        "token_by_model": token_by_model,
         "recent_logs": [
             {
                 "id": log.id,
@@ -127,6 +152,8 @@ async def get_dashboard_stats(user=Depends(get_current_user)):
                 "final_answer": (log.final_answer or "")[:100],
                 "status": log.status,
                 "duration_ms": log.duration_ms,
+                "total_tokens": log.total_tokens,
+                "model_name": log.model_name,
                 "created_at": log.created_at.isoformat() if log.created_at else None,
             }
             for log in recent_logs

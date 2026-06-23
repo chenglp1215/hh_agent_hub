@@ -3,6 +3,7 @@ from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_community.chat_models import ChatOllama
 from loguru import logger
+from core.token_callback import TokenCountCallback
 
 
 class LLMManager:
@@ -46,7 +47,7 @@ class LLMManager:
             kwargs["openai_api_base"] = base_url
 
         logger.info(f"Creating OpenAI LLM: model={model}, temperature={temperature}")
-        return ChatOpenAI(**kwargs)
+        return ChatOpenAI(**kwargs, callbacks=[TokenCountCallback()])
 
     def _create_anthropic(self, model: str, temperature: float, max_tokens: int,
                           api_key: Optional[str], base_url: Optional[str]) -> ChatAnthropic:
@@ -61,7 +62,7 @@ class LLMManager:
             kwargs["anthropic_api_url"] = base_url
 
         logger.info(f"Creating Anthropic LLM: model={model}, temperature={temperature}")
-        return ChatAnthropic(**kwargs)
+        return ChatAnthropic(**kwargs, callbacks=[TokenCountCallback()])
 
     def _create_ollama(self, model: str, temperature: float, max_tokens: int,
                        base_url: Optional[str]) -> ChatOllama:

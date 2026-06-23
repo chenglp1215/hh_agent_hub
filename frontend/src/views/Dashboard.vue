@@ -77,6 +77,12 @@
               <template v-if="column.key === 'duration'">
                 <span class="font-mono text-xs">{{ record.duration_ms != null ? record.duration_ms + 'ms' : '-' }}</span>
               </template>
+              <template v-if="column.key === 'model'">
+                <span class="text-xs text-[#8892a4]">{{ record.model_name || '-' }}</span>
+              </template>
+              <template v-if="column.key === 'tokens'">
+                <span class="font-mono text-xs text-[#ff6b6b]">{{ record.total_tokens > 0 ? formatTokenCount(record.total_tokens) : '-' }}</span>
+              </template>
               <template v-if="column.key === 'time'">
                 <span class="text-xs text-[#535b6e]">{{ formatTime(record.created_at) }}</span>
               </template>
@@ -156,6 +162,8 @@ const stats = ref({
   agents: 0, workflows: 0, apps: 0, today_executions: 0,
   mcp_online: 0, mcp_total: 0, kb_count: 0, skill_count: 0,
   queue_depth: 0, active_tasks: 0, worker_count: 0,
+  today_tokens: { prompt: 0, completion: 0, total: 0 },
+  token_by_model: {} as Record<string, { prompt: number; completion: number; total: number }>,
 })
 const recentLogs = ref<any[]>([])
 
@@ -187,34 +195,54 @@ const statCards = computed(() => [
     color: '#9b7cfc',
   },
   {
-    key: 'apps', label: '应用总数', value: stats.value.apps,
-    icon: AppstoreOutlined, to: '/apps',
-    gradient: 'linear-gradient(135deg, #00e676, #00b34d)',
-    glow: '0 0 16px rgba(0,230,118,0.3)',
-    color: '#00e676',
-  },
-  {
     key: 'executions', label: '今日对话', value: stats.value.today_executions,
     icon: ThunderboltOutlined, to: '/monitor/chat-logs',
     gradient: 'linear-gradient(135deg, #f0a500, #cc8800)',
     glow: '0 0 16px rgba(240,165,0,0.3)',
     color: '#f0a500',
   },
+  {
+    key: 'tokens', label: '今日 Token', value: formatTokenCount(stats.value.today_tokens.total),
+    icon: ThunderboltOutlined, to: null,
+    gradient: 'linear-gradient(135deg, #ff6b6b, #cc5555)',
+    glow: '0 0 16px rgba(255,107,107,0.3)',
+    color: '#ff6b6b',
+  },
 ])
 
-const resourceItems = computed(() => [
-  { key: 'workers', label: 'Worker 在线', value: stats.value.worker_count, color: stats.value.worker_count > 0 ? '#00e676' : '#ff3d4f' },
-  { key: 'queue', label: '队列排队', value: stats.value.queue_depth, color: stats.value.queue_depth > 5 ? '#f0a500' : '#00e676' },
-  { key: 'active', label: '执行中任务', value: stats.value.active_tasks, color: '#00d4ff' },
-  { key: 'mcp', label: `MCP Server (${stats.value.mcp_online}/${stats.value.mcp_total})`, value: stats.value.mcp_online > 0 ? '在线' : '离线', color: stats.value.mcp_online > 0 ? '#00e676' : '#ff3d4f' },
-  { key: 'kb', label: '知识库', value: stats.value.kb_count, color: '#00d4ff' },
-  { key: 'skills', label: 'Skill 模板', value: stats.value.skill_count, color: '#f0a500' },
-])
+function formatTokenCount(n: number): string {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
+  return String(n)
+}
+
+const resourceItems = computed(() => {
+  const items = [
+    { key: 'workers', label: 'Worker 在线', value: stats.value.worker_count, color: stats.value.worker_count > 0 ? '#00e676' : '#ff3d4f' },
+    { key: 'queue', label: '队列排队', value: stats.value.queue_depth, color: stats.value.queue_depth > 5 ? '#f0a500' : '#00e676' },
+    { key: 'active', label: '执行中任务', value: stats.value.active_tasks, color: '#00d4ff' },
+    { key: 'mcp', label: `MCP Server (${stats.value.mcp_online}/${stats.value.mcp_total})`, value: stats.value.mcp_online > 0 ? '在线' : '离线', color: stats.value.mcp_online > 0 ? '#00e676' : '#ff3d4f' },
+    { key: 'kb', label: '知识库', value: stats.value.kb_count, color: '#00d4ff' },
+    { key: 'skills', label: 'Skill 模板', value: stats.value.skill_count, color: '#f0a500' },
+  ]
+  // 按模型添加 token 消耗
+  const models = stats.value.token_by_model || {}
+  for (const [model, usage] of Object.entries(models)) {
+    items.push({
+      key: `token_${model}`,
+      label: `${model} Token`,
+      value: formatTokenCount(usage.total),
+      color: '#ff6b6b',
+    })
+  }
+  return items
+})
 
 const logColumns = [
-  { title: '用户输入', key: 'user_input', width: 200 },
-  { title: '回复', key: 'final_answer', width: 250 },
-  { title: '状态', key: 'status', width: 80 },
+  { title: '用户输入', key: 'user_input', width: 180 },
+  { title: '回复', key: 'final_answer', width: 200 },
+  { title: '模型', key: 'model', width: 100 },
+  { title: 'Token', key: 'tokens', width: 80 },
   { title: '耗时', key: 'duration', width: 80 },
   { title: '时间', key: 'time', width: 80 },
 ]
@@ -240,6 +268,8 @@ onMounted(async () => {
       queue_depth: d.queue_depth || 0,
       active_tasks: d.active_tasks || 0,
       worker_count: d.worker_count || 0,
+      today_tokens: d.today_tokens || { prompt: 0, completion: 0, total: 0 },
+      token_by_model: d.token_by_model || {},
     }
     recentLogs.value = d.recent_logs || []
   } catch {

@@ -17,6 +17,11 @@ class ChatLog(Model):
     error_message = fields.TextField(null=True)
     agent_count = fields.IntField(default=0)
     trace_summary = fields.JSONField(null=True)
+    # Token 消耗
+    prompt_tokens = fields.IntField(default=0)
+    completion_tokens = fields.IntField(default=0)
+    total_tokens = fields.IntField(default=0)
+    model_name = fields.CharField(max_length=100, null=True)
     created_at = fields.DatetimeField(auto_now_add=True, index=True)
 
     class Meta:

@@ -128,6 +128,7 @@ async def build_workflow(session: Session, message: str) -> tuple:
         "need_human": False, "human_input": "", "error": None, "trace": [],
         "session_id": session.id,
         "session_workspace": session.workspace_path or "",
+        "task_id": "",  # 由 execute_task 设置
     }
     return graph, initial_state, agent_names, workflow.flow_type
 
@@ -170,6 +171,11 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
         graph, initial_state, agent_names, flow_type = await build_workflow(session, message)
         if graph is None:
             raise ValueError("Failed to build workflow graph")
+
+        # 设置 task_id 用于 token 追踪
+        initial_state["task_id"] = task_id
+        from core.token_callback import current_task_id
+        current_task_id.set(task_id)
 
         if stream:
             # ── 流式执行 ──
@@ -431,6 +437,10 @@ async def _save_chat_log(app, session, task_id: str, user_input: str,
                 for t in trace_data
             ]
 
+        # 收集 token 使用量
+        from core.token_tracker import get_token_usage
+        token_usage = get_token_usage(task_id)
+
         existing = await ChatLog.get_or_none(session=session)
         if existing:
             existing.user_input = (existing.user_input or "") + "\n---\n" + user_input
@@ -440,6 +450,11 @@ async def _save_chat_log(app, session, task_id: str, user_input: str,
             existing.agent_count = max(existing.agent_count or 0, len(agent_names or []))
             existing.trace_summary = trace_summary or existing.trace_summary
             existing.error_message = error_message or existing.error_message
+            existing.prompt_tokens = (existing.prompt_tokens or 0) + token_usage.prompt_tokens
+            existing.completion_tokens = (existing.completion_tokens or 0) + token_usage.completion_tokens
+            existing.total_tokens = (existing.total_tokens or 0) + token_usage.total_tokens
+            if token_usage.model_name:
+                existing.model_name = token_usage.model_name
             await existing.save()
         else:
             await ChatLog.create(
@@ -453,6 +468,10 @@ async def _save_chat_log(app, session, task_id: str, user_input: str,
                 error_message=error_message,
                 agent_count=len(agent_names or []),
                 trace_summary=trace_summary,
+                prompt_tokens=token_usage.prompt_tokens,
+                completion_tokens=token_usage.completion_tokens,
+                total_tokens=token_usage.total_tokens,
+                model_name=token_usage.model_name,
             )
     except Exception as e:
         logger.warning(f"Failed to save ChatLog: {e}")

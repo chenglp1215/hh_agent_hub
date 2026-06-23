@@ -34,7 +34,7 @@
         showTotal: (t: number) => `共 ${t} 条`,
         onChange: (p: number, s: number) => { currentPage = p; currentSize = s; loadData(); },
       }"
-      @row-click="openDetail"
+      :customRow="(record: LogItem) => ({ onClick: () => openDetail(record), style: { cursor: 'pointer' } })"
       class="clickable-table"
     >
       <template #bodyCell="{ column, record }">

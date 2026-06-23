@@ -133,10 +133,18 @@ const props = defineProps<{
   sessionId?: string
   initialMessages?: any[]
 }>()
+const emit = defineEmits<{
+  (e: 'update:sessionId', value: string): void
+}>()
 const messages = ref<any[]>(props.initialMessages || [])
 const inputText = ref('')
 const streaming = ref(false)
 const msgContainer = ref<HTMLDivElement>()
+const currentSessionId = ref<string | undefined>(props.sessionId)
+
+watch(() => props.sessionId, (val) => {
+  currentSessionId.value = val
+})
 
 watch(() => messages.value.length, async () => {
   await nextTick()
@@ -158,7 +166,7 @@ async function handleSend() {
     const headers: Record<string, string> = {}
     if (props.apiKey) headers['X-API-Key'] = props.apiKey
     const body: Record<string, any> = { app_id: props.appId, message: text, stream: true }
-    if (props.sessionId) body.session_id = props.sessionId
+    if (currentSessionId.value) body.session_id = currentSessionId.value
     createSSEConnection(
       '/api/v1/chat',
       body,
@@ -182,6 +190,10 @@ async function handleSend() {
           }
         } else if (event === 'done') {
           streaming.value = false
+          if (data.session_id) {
+            currentSessionId.value = data.session_id
+            emit('update:sessionId', data.session_id)
+          }
         }
       },
       headers,

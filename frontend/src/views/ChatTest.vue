@@ -38,6 +38,7 @@
           :apiKey="selectedAppApiKey"
           :sessionId="sessionId || undefined"
           :initialMessages="initialMessages"
+          @update:sessionId="(sid: string) => sessionId = sid"
         />
       </div>
       <div v-else class="chat-area glass flex items-center justify-center">

@@ -67,7 +67,7 @@ async def chat(req: ChatRequest, request: Request):
 async def _poll_response(task_id: str):
     """非流式：轮询等待 worker 结果"""
     task_queue = get_task_queue()
-    result = await task_queue.get_result(task_id, timeout=600)
+    result = await task_queue.get_result(task_id, timeout=1800)
 
     if result is None:
         return error(code=504, message="任务执行超时")

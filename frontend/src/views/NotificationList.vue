@@ -24,7 +24,7 @@
           />
         </template>
         <template v-if="column.key === 'created_at'">
-          <span>{{ record.created_at || '-' }}</span>
+          <span>{{ formatTime(record.created_at) }}</span>
         </template>
         <template v-if="column.key === 'actions'">
           <a-space>
@@ -44,6 +44,7 @@ import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { notificationsApi } from '@/api/notifications'
+import { formatTime } from '@/utils/time'
 
 const notifications = ref<any[]>([])
 const loading = ref(false)

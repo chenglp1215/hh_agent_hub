@@ -28,7 +28,7 @@
             <span class="text-xs font-mono">{{ record.git_repo_url }}</span>
           </template>
           <template v-if="column.key === 'created_at'">
-            <span class="text-xs">{{ record.created_at?.slice(0, 19).replace('T', ' ') }}</span>
+            <span class="text-xs">{{ formatTime(record.created_at) }}</span>
           </template>
           <template v-if="column.key === 'actions'">
             <a-button size="small" @click="$router.push(`/projects/${record.id}/edit`)">编辑</a-button>
@@ -48,6 +48,7 @@ import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { projectsApi } from '@/api/projects'
+import { formatTime } from '@/utils/time'
 
 const projects = ref<any[]>([])
 const loading = ref(false)

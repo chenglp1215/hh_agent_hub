@@ -35,10 +35,10 @@
           </a-tooltip>
         </template>
         <template v-if="column.key === 'last_fired_at'">
-          <span>{{ record.last_fired_at || '-' }}</span>
+          <span>{{ formatTime(record.last_fired_at) }}</span>
         </template>
         <template v-if="column.key === 'next_fire_at'">
-          <span>{{ record.next_fire_at || '-' }}</span>
+          <span>{{ formatTime(record.next_fire_at) }}</span>
         </template>
         <template v-if="column.key === 'actions'">
           <a-space>
@@ -84,7 +84,7 @@
             <span>{{ record.duration_ms != null ? `${record.duration_ms}ms` : '-' }}</span>
           </template>
           <template v-if="column.key === 'started_at'">
-            <span>{{ record.started_at || '-' }}</span>
+            <span>{{ formatTime(record.started_at) }}</span>
           </template>
           <template v-if="column.key === 'notified'">
             <a-tag :color="record.notified ? 'green' : 'default'">
@@ -132,6 +132,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
+import { formatTime } from '@/utils/time'
 import { triggersApi } from '@/api/triggers'
 import { chatLogsApi } from '@/api/chatLogs'
 

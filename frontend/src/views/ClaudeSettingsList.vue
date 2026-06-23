@@ -23,7 +23,7 @@
             </a-tag>
           </template>
           <template v-if="column.key === 'created_at'">
-            <span class="text-xs">{{ record.created_at?.slice(0, 19).replace('T', ' ') }}</span>
+            <span class="text-xs">{{ formatTime(record.created_at) }}</span>
           </template>
           <template v-if="column.key === 'actions'">
             <a-button size="small" @click="$router.push(`/claude-settings/${record.id}/edit`)">编辑</a-button>
@@ -43,6 +43,7 @@ import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { claudeSettingsApi } from '@/api/claudeSettings'
+import { formatTime } from '@/utils/time'
 
 const settings = ref<any[]>([])
 const loading = ref(false)

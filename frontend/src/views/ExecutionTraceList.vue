@@ -32,6 +32,9 @@
             {{ statusLabel(record.status) }}
           </span>
         </template>
+        <template v-if="column.key === 'time'">
+          {{ formatTime(record.started_at) }}
+        </template>
         <template v-if="column.key === 'duration'">
           {{ record.total_duration_ms ? `${(record.total_duration_ms / 1000).toFixed(1)}s` : '-' }}
         </template>
@@ -43,6 +46,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { tracesApi } from '@/api/traces'
+import { formatTime } from '@/utils/time'
 
 const traces = ref<any[]>([])
 const loading = ref(false)

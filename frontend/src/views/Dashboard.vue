@@ -152,7 +152,7 @@ const recentTraces = ref<any[]>([])
 
 const dateStr = computed(() => {
   return new Date().toLocaleDateString('zh-CN', {
-    year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
   })
 })
 

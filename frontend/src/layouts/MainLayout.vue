@@ -90,7 +90,7 @@ const userInitial = computed(() => {
 
 function updateTime() {
   const now = new Date()
-  timeStr.value = now.toLocaleTimeString('zh-CN', { hour12: false })
+  timeStr.value = now.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })
 }
 
 onMounted(async () => {

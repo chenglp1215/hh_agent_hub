@@ -22,10 +22,10 @@
             <span class="text-gray-400">状态:</span> {{ statusLabel(metadata.status) }}
           </div>
           <div>
-            <span class="text-gray-400">开始:</span> {{ metadata.started_at }}
+            <span class="text-gray-400">开始:</span> {{ formatTime(metadata.started_at) }}
           </div>
           <div>
-            <span class="text-gray-400">完成:</span> {{ metadata.completed_at || '-' }}
+            <span class="text-gray-400">完成:</span> {{ formatTime(metadata.completed_at) }}
           </div>
         </div>
       </a-card>
@@ -81,6 +81,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { tracesApi } from '@/api/traces'
+import { formatTime } from '@/utils/time'
 import { createWSConnection } from '@/utils/ws'
 
 const route = useRoute()

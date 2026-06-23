@@ -39,6 +39,9 @@
             {{ record.status === 'active' ? '启用' : '禁用' }}
           </a-tag>
         </template>
+        <template v-if="column.key === 'time'">
+          <span class="text-xs">{{ formatTime(record.updated_at) }}</span>
+        </template>
         <template v-if="column.key === 'resources'">
           <span class="text-xs text-gray-400">
             MCP:{{ record.resource_count?.mcp || 0 }}
@@ -62,6 +65,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { formatTime } from '@/utils/time'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { agentsApi } from '@/api/agents'

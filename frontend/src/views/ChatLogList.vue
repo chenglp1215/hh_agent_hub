@@ -222,10 +222,8 @@ function fmtDuration(ms: number | null): string {
   return `${Math.floor(ms / 60000)}m${Math.floor((ms % 60000) / 1000)}s`
 }
 
-function fmtTime(t: string | null): string {
-  if (!t) return '-'
-  return new Date(t).toLocaleString('zh-CN', { hour12: false })
-}
+import { formatTime } from '@/utils/time'
+const fmtTime = formatTime
 
 async function loadData() {
   loading.value = true

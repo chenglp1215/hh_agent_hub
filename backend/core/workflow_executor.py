@@ -37,6 +37,8 @@ async def build_workflow(session: Session, message: str) -> tuple:
     """
     messages = session.messages or []
     messages.append({"role": "user", "content": message})
+    session.messages = messages
+    await session.save()
 
     # Tortoise ORM: ForeignKey 需要 await 才能获取关联对象
     try:

@@ -78,10 +78,10 @@
                 <span class="font-mono text-xs">{{ record.duration_ms != null ? record.duration_ms + 'ms' : '-' }}</span>
               </template>
               <template v-if="column.key === 'model'">
-                <span class="text-xs text-[#8892a4]">{{ record.model_name || '-' }}</span>
+                <span class="text-xs" :class="record.model_name ? 'text-[#8892a4]' : 'text-[#535b6e]'">{{ record.model_name || '未记录' }}</span>
               </template>
               <template v-if="column.key === 'tokens'">
-                <span class="font-mono text-xs text-[#ff6b6b]">{{ record.total_tokens > 0 ? formatTokenCount(record.total_tokens) : '-' }}</span>
+                <span class="font-mono text-xs" :class="record.total_tokens > 0 ? 'text-[#ff6b6b]' : 'text-[#535b6e]'">{{ record.total_tokens > 0 ? formatTokenCount(record.total_tokens) : '-' }}</span>
               </template>
               <template v-if="column.key === 'time'">
                 <span class="text-xs text-[#535b6e]">{{ formatTime(record.created_at) }}</span>

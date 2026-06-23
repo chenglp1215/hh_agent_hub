@@ -101,12 +101,12 @@ class ClaudeCodeRunner:
         force_pull = self._needs_code_pull(context)
         ensure_code_exists(project, project_code_path, force_pull=force_pull)
 
-        # --- Write CLAUDE.md to agent workspace, referencing project code ---
-        self._write_claude_md(agent_workspace, context, project.system_prompt,
+        # --- Write CLAUDE.md to session workspace root (cwd for SDK) ---
+        self._write_claude_md(session_workspace, context, project.system_prompt,
                               project_code_path=project_code_path)
 
         # --- Write .claude/settings.json for permissions ---
-        self._write_claude_settings(agent_workspace, settings)
+        self._write_claude_settings(session_workspace, settings)
 
         # cwd 使用 session_workspace 根目录，让 agent 可以访问项目代码和自身工作区
         cwd_for_sdk = session_workspace

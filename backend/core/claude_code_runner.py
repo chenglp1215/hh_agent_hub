@@ -170,16 +170,21 @@ class ClaudeCodeRunner:
             except json.JSONDecodeError:
                 pass
 
-        if extra_settings.get("model"):
-            options_kwargs["model"] = extra_settings["model"]
-        elif settings.model:
-            options_kwargs["model"] = settings.model
-
+        # 先加载环境变量（ANTHROPIC_MODEL 等可能在 env 中）
         env_vars = extra_settings.get("env", {})
         if env_vars:
             for k, v in env_vars.items():
                 os.environ[k] = v
             logger.info(f"Loaded {len(env_vars)} env vars from settings_json")
+
+        # 模型优先级: env.ANTHROPIC_MODEL > settings_json.model > settings.model
+        env_model = env_vars.get("ANTHROPIC_MODEL")
+        if env_model:
+            options_kwargs["model"] = env_model
+        elif extra_settings.get("model"):
+            options_kwargs["model"] = extra_settings["model"]
+        elif settings.model:
+            options_kwargs["model"] = settings.model
 
         system_prompt_parts = []
         agent_system_prompt = context.get("system_prompt", "")

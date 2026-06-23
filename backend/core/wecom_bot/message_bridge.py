@@ -67,27 +67,43 @@ class WecomBotBridge:
         logger.info("Refreshing wecom_bot trigger mappings...")
         await self.load_mappings()
 
+    @staticmethod
+    def _strip_at_suffix(content: str) -> str:
+        """清理消息末尾的 @机器人名 后缀
+
+        群聊中 @机器人 发消息时，企微会在末尾附加 @机器人名。
+        例如: "7I6P85@运营服务研发智能机器人 " → "7I6P85"
+        """
+        # 匹配末尾的 @xxx（可能有空格），只清理最后一个
+        import re
+        # 末尾 @+中文/英文/数字/下划线，前后可能有空格
+        cleaned = re.sub(r'\s*@[^\s@]+\s*$', '', content)
+        return cleaned.strip()
+
     async def handle_message(self, frame: Dict[str, Any], ws_client) -> None:
         """处理收到的 aibot 消息回调"""
         body = frame.get("body", {})
         msgtype = body.get("msgtype", "")
         from_info = body.get("from", {})
 
-        chatid = from_info.get("chatid", "")
+        # chatid 在 body 顶层（群聊）或 from 中（私聊）
+        chatid = body.get("chatid", "") or from_info.get("chatid", "")
         userid = from_info.get("userid", "")
 
         logger.info(f"Received message: msgtype={msgtype}, chatid={chatid}, userid={userid}")
 
         # 非文本消息，回复提示
         if msgtype != "text":
-            reply_target = chatid or userid
-            if reply_target:
+            if chatid or userid:
                 await self._reply_text(ws_client, frame, chatid, userid,
                     "暂仅支持文本消息")
             return
 
         content = body.get("text", {}).get("content", "").strip()
-        logger.info(f"Text content: {content}")
+        # 群聊 @机器人 时，消息可能带 @机器人名 后缀，如 "7I6P85@机器人名"
+        # 只清理末尾的 @xxx 后缀，保留消息中间的 @
+        content = self._strip_at_suffix(content)
+        logger.info(f"Text content (cleaned): '{content}'")
 
         # 检查是否是验证码
         if await self._check_verification_code(content, chatid, userid, frame, ws_client):

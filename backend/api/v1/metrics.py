@@ -8,6 +8,7 @@ from models.app import App
 from models.mcp_server import McpServerRegistry
 from models.knowledge_base import KnowledgeBase
 from models.skill import SkillRegistry
+from models.chat_log import ChatLog
 from utils.response import success
 
 router = APIRouter(prefix="/system/metrics", tags=["监控指标"])
@@ -60,21 +61,25 @@ async def get_dashboard_stats(user=Depends(get_current_user)):
     agent_count = await Agent.all().count()
     workflow_count = await Workflow.all().count()
     app_count = await App.all().count()
-    mcp_count = await McpServerRegistry.all().count()
     kb_count = await KnowledgeBase.all().count()
     skill_count = await SkillRegistry.all().count()
 
-    # Today's executions
-    from datetime import datetime, timedelta
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    traces = await WorkflowTrace.all()
-    today_executions = sum(1 for t in traces if t.created_at and t.created_at >= today_start)
+    # MCP server counts (使用 last_checked_at 是否在 5 分钟内判断在线)
+    mcp_total = await McpServerRegistry.all().count()
+    from datetime import datetime, timedelta, timezone
+    beijing_tz = timezone(timedelta(hours=8))
+    now = datetime.now(beijing_tz).replace(tzinfo=None)
+    five_min_ago = now - timedelta(minutes=5)
+    mcp_online = await McpServerRegistry.filter(
+        status="active", last_checked_at__gte=five_min_ago
+    ).count()
 
-    # MCP online count
-    mcp_online = sum(1 for _ in [])  # placeholder — actual check requires connection testing
+    # Today's executions (使用 ChatLog，北京时间零点)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_executions = await ChatLog.filter(created_at__gte=today_start).count()
 
-    # Recent traces (last 10)
-    recent_traces = sorted(traces, key=lambda t: t.created_at or datetime.min, reverse=True)[:10]
+    # Recent chat logs (last 10)
+    recent_logs = await ChatLog.all().order_by('-created_at').limit(10)
 
     return success(data={
         "agents": agent_count,
@@ -82,16 +87,20 @@ async def get_dashboard_stats(user=Depends(get_current_user)):
         "apps": app_count,
         "today_executions": today_executions,
         "mcp_online": mcp_online,
+        "mcp_total": mcp_total,
         "kb_count": kb_count,
         "skill_count": skill_count,
-        "recent_traces": [
+        "recent_logs": [
             {
-                "id": t.id,
-                "execution_id": t.execution_id,
-                "status": t.status,
-                "total_duration_ms": t.total_duration_ms,
-                "created_at": t.created_at.isoformat() if t.created_at else None,
+                "id": log.id,
+                "session_id": log.session_id,
+                "app_id": log.app_id,
+                "user_input": (log.user_input or "")[:100],
+                "final_answer": (log.final_answer or "")[:100],
+                "status": log.status,
+                "duration_ms": log.duration_ms,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
             }
-            for t in recent_traces
+            for log in recent_logs
         ],
     })

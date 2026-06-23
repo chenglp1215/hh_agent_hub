@@ -45,14 +45,14 @@
           <div class="panel-header">
             <div class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-[#00d4ff]" style="box-shadow: 0 0 6px #00d4ff;" />
-              <span class="text-sm font-semibold text-[#e4e7ee]">最近执行</span>
+              <span class="text-sm font-semibold text-[#e4e7ee]">最近对话</span>
             </div>
-            <a-button type="link" size="small" @click="$router.push('/monitor/traces')">查看全部</a-button>
+            <a-button type="link" size="small" @click="$router.push('/monitor/chat-logs')">查看全部</a-button>
           </div>
 
           <a-table
-            :dataSource="recentTraces"
-            :columns="traceColumns"
+            :dataSource="recentLogs"
+            :columns="logColumns"
             rowKey="id"
             size="small"
             :pagination="false"
@@ -60,27 +60,32 @@
             class="dashboard-table"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'execution_id'">
-                <span class="font-mono text-xs text-[#00d4ff]">{{ (record.execution_id || '').slice(0, 12) }}...</span>
+              <template v-if="column.key === 'user_input'">
+                <a-tooltip :title="record.user_input">
+                  <span class="text-xs text-[#c2c6cc] truncate inline-block max-w-[200px] align-middle">{{ record.user_input }}</span>
+                </a-tooltip>
+              </template>
+              <template v-if="column.key === 'final_answer'">
+                <a-tooltip :title="record.final_answer">
+                  <span class="text-xs text-[#8892a4] truncate inline-block max-w-[250px] align-middle">{{ record.final_answer }}</span>
+                </a-tooltip>
               </template>
               <template v-if="column.key === 'status'">
                 <span class="status-dot" :class="`status-${record.status}`" />
                 <span class="text-xs ml-2">{{ statusLabel(record.status) }}</span>
               </template>
               <template v-if="column.key === 'duration'">
-                <span class="font-mono text-xs">{{ record.total_duration_ms }}ms</span>
+                <span class="font-mono text-xs">{{ record.duration_ms != null ? record.duration_ms + 'ms' : '-' }}</span>
               </template>
-              <template v-if="column.key === 'actions'">
-                <a-button size="small" type="link" @click="$router.push(`/monitor/traces/${record.execution_id}`)">
-                  查看
-                </a-button>
+              <template v-if="column.key === 'time'">
+                <span class="text-xs text-[#535b6e]">{{ formatTime(record.created_at) }}</span>
               </template>
             </template>
           </a-table>
 
           <a-empty
-            v-if="!loading && recentTraces.length === 0"
-            description="暂无执行记录"
+            v-if="!loading && recentLogs.length === 0"
+            description="暂无对话记录"
             class="py-8"
           />
         </div>
@@ -147,14 +152,23 @@ import { dashboardApi } from '@/api/dashboard'
 import AnimatedCounter from '@/components/AnimatedCounter.vue'
 
 const loading = ref(false)
-const stats = ref({ agents: 0, workflows: 0, apps: 0, today_executions: 0, mcp_online: 0, kb_count: 0, skill_count: 0 })
-const recentTraces = ref<any[]>([])
+const stats = ref({
+  agents: 0, workflows: 0, apps: 0, today_executions: 0,
+  mcp_online: 0, mcp_total: 0, kb_count: 0, skill_count: 0,
+})
+const recentLogs = ref<any[]>([])
 
 const dateStr = computed(() => {
   return new Date().toLocaleDateString('zh-CN', {
     timeZone: 'Asia/Shanghai', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
   })
 })
+
+function formatTime(iso: string) {
+  if (!iso) return '-'
+  const d = new Date(iso)
+  return d.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
 
 const statCards = computed(() => [
   {
@@ -179,8 +193,8 @@ const statCards = computed(() => [
     color: '#00e676',
   },
   {
-    key: 'executions', label: '今日执行', value: stats.value.today_executions,
-    icon: ThunderboltOutlined, to: null,
+    key: 'executions', label: '今日对话', value: stats.value.today_executions,
+    icon: ThunderboltOutlined, to: '/monitor/chat-logs',
     gradient: 'linear-gradient(135deg, #f0a500, #cc8800)',
     glow: '0 0 16px rgba(240,165,0,0.3)',
     color: '#f0a500',
@@ -188,20 +202,21 @@ const statCards = computed(() => [
 ])
 
 const resourceItems = computed(() => [
-  { key: 'mcp', label: 'MCP Server 在线', value: stats.value.mcp_online, color: '#00e676' },
+  { key: 'mcp', label: `MCP Server (${stats.value.mcp_online}/${stats.value.mcp_total})`, value: stats.value.mcp_online > 0 ? '在线' : '离线', color: stats.value.mcp_online > 0 ? '#00e676' : '#ff3d4f' },
   { key: 'kb', label: '知识库', value: stats.value.kb_count, color: '#00d4ff' },
   { key: 'skills', label: 'Skill 模板', value: stats.value.skill_count, color: '#f0a500' },
 ])
 
-const traceColumns = [
-  { title: 'Execution ID', key: 'execution_id', ellipsis: true },
-  { title: '状态', key: 'status', width: 90 },
+const logColumns = [
+  { title: '用户输入', key: 'user_input', width: 200 },
+  { title: '回复', key: 'final_answer', width: 250 },
+  { title: '状态', key: 'status', width: 80 },
   { title: '耗时', key: 'duration', width: 80 },
-  { title: '', key: 'actions', width: 60 },
+  { title: '时间', key: 'time', width: 80 },
 ]
 
 function statusLabel(s: string) {
-  return { running: '运行中', success: '成功', failed: '失败' }[s] || s
+  return { success: '成功', failed: '失败', error: '失败' }[s] || s
 }
 
 onMounted(async () => {
@@ -215,10 +230,11 @@ onMounted(async () => {
       apps: d.apps || 0,
       today_executions: d.today_executions || 0,
       mcp_online: d.mcp_online || 0,
+      mcp_total: d.mcp_total || 0,
       kb_count: d.kb_count || 0,
       skill_count: d.skill_count || 0,
     }
-    recentTraces.value = d.recent_traces || []
+    recentLogs.value = d.recent_logs || []
   } catch {
     // silent fail, keep zeros
   } finally {
@@ -320,6 +336,7 @@ onMounted(async () => {
 .status-running { background: #00d4ff; box-shadow: 0 0 6px #00d4ff; animation: glow-pulse 2s ease-in-out infinite; }
 .status-success { background: #00e676; box-shadow: 0 0 6px #00e676; }
 .status-failed { background: #ff3d4f; box-shadow: 0 0 6px #ff3d4f; }
+.status-error { background: #ff3d4f; box-shadow: 0 0 6px #ff3d4f; }
 
 /* Resource items */
 .resource-item {

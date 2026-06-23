@@ -151,7 +151,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import {
-  RobotOutlined, ApartmentOutlined, AppstoreOutlined, ThunderboltOutlined,
+  RobotOutlined, ApartmentOutlined, ThunderboltOutlined,
   PlusOutlined, ApiOutlined, MessageOutlined,
 } from '@ant-design/icons-vue'
 import { dashboardApi } from '@/api/dashboard'
@@ -202,7 +202,7 @@ const statCards = computed(() => [
     color: '#f0a500',
   },
   {
-    key: 'tokens', label: '今日 Token', value: formatTokenCount(stats.value.today_tokens.total),
+    key: 'tokens', label: '今日 Token', value: stats.value.today_tokens.total,
     icon: ThunderboltOutlined, to: null,
     gradient: 'linear-gradient(135deg, #ff6b6b, #cc5555)',
     glow: '0 0 16px rgba(255,107,107,0.3)',

@@ -301,9 +301,8 @@ async def _save_chat_log(app, session, task_id: str, user_input: str,
                           agent_names: List[str] = None,
                           trace_data: List[Dict] = None,
                           error_message: str = None):
-    """将 chat 交互写入 ChatLog 表"""
+    """将会话对话写入 ChatLog 表，同一 session 复用一条记录"""
     try:
-        # 提取 trace 摘要（只保留关键事件，用于前端展示）
         trace_summary = None
         if trace_data:
             trace_summary = [
@@ -313,17 +312,28 @@ async def _save_chat_log(app, session, task_id: str, user_input: str,
                 for t in trace_data
             ]
 
-        await ChatLog.create(
-            app=app,
-            session=session,
-            task_id=task_id,
-            user_input=user_input,
-            final_answer=final_answer,
-            duration_ms=duration_ms,
-            status=status,
-            error_message=error_message,
-            agent_count=len(agent_names or []),
-            trace_summary=trace_summary,
-        )
+        existing = await ChatLog.get_or_none(session=session)
+        if existing:
+            existing.user_input = (existing.user_input or "") + "\n---\n" + user_input
+            existing.final_answer = (existing.final_answer or "") + "\n---\n" + final_answer
+            existing.duration_ms = (existing.duration_ms or 0) + duration_ms
+            existing.status = status if status == "error" else existing.status
+            existing.agent_count = max(existing.agent_count or 0, len(agent_names or []))
+            existing.trace_summary = trace_summary or existing.trace_summary
+            existing.error_message = error_message or existing.error_message
+            await existing.save()
+        else:
+            await ChatLog.create(
+                app=app,
+                session=session,
+                task_id=task_id,
+                user_input=user_input,
+                final_answer=final_answer,
+                duration_ms=duration_ms,
+                status=status,
+                error_message=error_message,
+                agent_count=len(agent_names or []),
+                trace_summary=trace_summary,
+            )
     except Exception as e:
         logger.warning(f"Failed to save ChatLog: {e}")

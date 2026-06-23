@@ -108,9 +108,12 @@ class ClaudeCodeRunner:
         # --- Write .claude/settings.json for permissions ---
         self._write_claude_settings(agent_workspace, settings)
 
+        # cwd 使用 session_workspace 根目录，让 agent 可以访问项目代码和自身工作区
+        cwd_for_sdk = session_workspace
+
         try:
             return await self._run_sdk(
-                workspace_dir=agent_workspace,
+                workspace_dir=cwd_for_sdk,
                 user_input=user_input,
                 settings=settings,
                 project=project,

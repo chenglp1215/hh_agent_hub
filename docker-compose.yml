@@ -81,6 +81,30 @@ services:
       - agent-net
 
   # ============================================
+  # 企微机器人 WS 连接器
+  # ============================================
+  wecom-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.wecom-bot
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=${DB_USER:-agent_platform}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme}
+      - DB_NAME=${DB_NAME:-agent_platform}
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - agent-net
+
+  # ============================================
   # MySQL 8.0
   # ============================================
   mysql:

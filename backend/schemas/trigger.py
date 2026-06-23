@@ -6,6 +6,12 @@ from enum import Enum
 class TriggerTypeEnum(str, Enum):
     interval = "interval"
     cron = "cron"
+    wecom_bot = "wecom_bot"
+
+
+class WecomChatTypeEnum(str, Enum):
+    group = "group"
+    user = "user"
 
 
 class IntervalUnitEnum(str, Enum):
@@ -36,6 +42,10 @@ class TriggerCreate(BaseModel):
     app_id: int
     message: str = Field(..., min_length=1)
     notification_id: Optional[int] = None
+    # wecom_bot fields
+    wecom_chat_type: Optional[WecomChatTypeEnum] = None
+    wecom_chat_id: Optional[str] = Field(None, max_length=100)
+    wecom_user_id: Optional[str] = Field(None, max_length=100)
 
     class Config:
         use_enum_values = True
@@ -53,6 +63,10 @@ class TriggerUpdate(BaseModel):
     message: Optional[str] = Field(None, min_length=1)
     enabled: Optional[bool] = None
     notification_id: Optional[int] = None
+    # wecom_bot fields
+    wecom_chat_type: Optional[WecomChatTypeEnum] = None
+    wecom_chat_id: Optional[str] = Field(None, max_length=100)
+    wecom_user_id: Optional[str] = Field(None, max_length=100)
 
     class Config:
         use_enum_values = True

@@ -10,14 +10,17 @@
     <a-table :dataSource="triggers" :columns="columns" rowKey="id" :loading="loading">
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'trigger_type'">
-          <a-tag :color="record.trigger_type === 'cron' ? 'blue' : 'green'">
-            {{ record.trigger_type === 'cron' ? 'Cron' : '间隔' }}
+          <a-tag :color="triggerTypeColor(record.trigger_type)">
+            {{ triggerTypeLabel(record.trigger_type) }}
           </a-tag>
         </template>
         <template v-if="column.key === 'schedule'">
           <span v-if="record.trigger_type === 'interval'" class="text-sm">
             每 {{ record.interval_value }}
             {{ record.interval_unit === 'minutes' ? '分钟' : record.interval_unit === 'hours' ? '小时' : '天' }}
+          </span>
+          <span v-else-if="record.trigger_type === 'wecom_bot'" class="text-sm text-gray-400">
+            {{ record.wecom_chat_type === 'group' ? '群聊' : '私聊' }}: {{ record.wecom_chat_id || record.wecom_user_id }}
           </span>
           <code v-else class="text-xs px-1 py-0.5 rounded" style="background: #1a1a1c; color: #5e6ad2">
             {{ record.cron_expression }}
@@ -142,7 +145,7 @@ const loading = ref(false)
 
 const columns = [
   { title: '名称', dataIndex: 'name', key: 'name' },
-  { title: '类型', key: 'trigger_type', width: 80 },
+  { title: '类型', key: 'trigger_type', width: 100 },
   { title: '调度配置', key: 'schedule' },
   { title: '关联应用', dataIndex: 'app_name' },
   { title: '触发消息', key: 'message' },
@@ -151,6 +154,24 @@ const columns = [
   { title: '下次触发', key: 'next_fire_at' },
   { title: '操作', key: 'actions', width: 360 },
 ]
+
+function triggerTypeColor(type: string) {
+  const map: Record<string, string> = {
+    interval: 'green',
+    cron: 'blue',
+    wecom_bot: 'purple',
+  }
+  return map[type] || 'default'
+}
+
+function triggerTypeLabel(type: string) {
+  const map: Record<string, string> = {
+    interval: '间隔',
+    cron: 'Cron',
+    wecom_bot: '企微机器人',
+  }
+  return map[type] || type
+}
 
 async function fetchList() {
   loading.value = true

@@ -41,9 +41,9 @@ async def init_scheduler():
     _scheduler.start()
     logger.info("APScheduler started")
 
-    # 从数据库加载所有启用触发器
+    # 从数据库加载所有启用触发器（跳过 wecom_bot 类型，它由独立进程处理）
     from models.trigger import Trigger
-    triggers = await Trigger.filter(enabled=True).select_related("app")
+    triggers = await Trigger.filter(enabled=True).exclude(trigger_type="wecom_bot").select_related("app")
     count = 0
     for trigger in triggers:
         try:

@@ -9,6 +9,11 @@ class Trigger(Model):
     interval_value = fields.IntField(null=True)
     interval_unit = fields.CharField(max_length=10, null=True)  # "minutes" | "hours" | "days"
     cron_expression = fields.CharField(max_length=100, null=True)
+    # --- wecom_bot fields ---
+    wecom_chat_type = fields.CharField(max_length=10, null=True)  # "group" | "user"
+    wecom_chat_id = fields.CharField(max_length=100, null=True)
+    wecom_user_id = fields.CharField(max_length=100, null=True)
+    # --- end wecom_bot fields ---
     app = fields.ForeignKeyField("models.App", on_delete=fields.CASCADE)
     message = fields.TextField()
     enabled = fields.BooleanField(default=True)

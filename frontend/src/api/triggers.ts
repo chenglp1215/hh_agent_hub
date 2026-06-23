@@ -9,4 +9,7 @@ export const triggersApi = {
   execute: (id: number) => client.post(`/triggers/${id}/execute`),
   executions: (id: number, params?: { page?: number; page_size?: number }) =>
     client.get(`/triggers/${id}/executions`, { params }),
+  // wecom-bot binding
+  generateCode: (app_id: number) => client.post('/triggers/wecom-bot/generate-code', { app_id }),
+  getBindStatus: (code: string) => client.get(`/triggers/wecom-bot/bind-status/${code}`),
 }

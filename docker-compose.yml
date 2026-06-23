@@ -57,6 +57,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    user: appuser
     command: python worker/main.py
     environment:
       - DB_HOST=mysql

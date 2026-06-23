@@ -32,7 +32,13 @@
 
       <!-- Right: chat window -->
       <div class="chat-area glass" v-if="selectedAppId">
-        <ChatWindow :key="selectedAppId" :appId="selectedAppId" :apiKey="selectedAppApiKey" />
+        <ChatWindow
+          :key="chatKey"
+          :appId="selectedAppId"
+          :apiKey="selectedAppApiKey"
+          :sessionId="sessionId || undefined"
+          :initialMessages="initialMessages"
+        />
       </div>
       <div v-else class="chat-area glass flex items-center justify-center">
         <a-empty description="选择左侧应用开始测试" />
@@ -43,21 +49,49 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { appsApi } from '@/api/apps'
+import client from '@/api/client'
 import ChatWindow from '@/components/ChatWindow.vue'
 
+const route = useRoute()
 const apps = ref<any[]>([])
 const selectedAppId = ref<number | null>(null)
 const selectedAppApiKey = ref('')
+const sessionId = ref<string | null>(null)
+const initialMessages = ref<any[]>([])
+const chatKey = ref(0)
 
 async function selectApp(id: number) {
   if (selectedAppId.value === id) return
   selectedAppId.value = id
   selectedAppApiKey.value = ''
+  sessionId.value = null
+  initialMessages.value = []
+  chatKey.value++
   try {
     const res = await appsApi.get(id)
     selectedAppApiKey.value = res.data.data?.api_key || ''
   } catch { /* ignore */ }
+}
+
+async function loadSession(appId: number, sid: string) {
+  selectedAppId.value = appId
+  sessionId.value = sid
+  try {
+    const appRes = await appsApi.get(appId)
+    selectedAppApiKey.value = appRes.data.data?.api_key || ''
+  } catch { /* ignore */ }
+  try {
+    const res = await client.get(`/chat/sessions/${sid}`)
+    const msgs = res.data.data?.messages || []
+    initialMessages.value = msgs.map((m: any) => ({
+      role: m.role,
+      content: m.content,
+      type: 'text',
+    }))
+    chatKey.value++
+  } catch { initialMessages.value = [] }
 }
 
 onMounted(async () => {
@@ -65,6 +99,18 @@ onMounted(async () => {
     const res = await appsApi.list()
     apps.value = res.data.data || []
   } catch { /* ignore */ }
+
+  // Handle query params: ?app_id=1&session_id=xxx
+  const qAppId = route.query.app_id
+  const qSid = route.query.session_id
+  if (qAppId) {
+    const id = Number(qAppId)
+    if (qSid) {
+      await loadSession(id, String(qSid))
+    } else {
+      await selectApp(id)
+    }
+  }
 })
 </script>
 
@@ -74,15 +120,12 @@ onMounted(async () => {
   flex-direction: column;
   height: calc(100vh - 140px);
 }
-
 .chat-layout {
   display: flex;
   gap: 16px;
   flex: 1;
   min-height: 0;
 }
-
-/* App sidebar */
 .app-sidebar {
   width: 260px;
   min-width: 260px;
@@ -127,29 +170,10 @@ onMounted(async () => {
   background: #00d4ff;
   box-shadow: 0 0 8px #00d4ff88;
 }
-.app-item-content {
-  flex: 1;
-  min-width: 0;
-}
-.app-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: #e4e7ee;
-  transition: color var(--duration-fast) var(--ease-out);
-}
-.app-item--active .app-name { color: #e4e7ee; }
-.app-subtitle {
-  font-size: 11px;
-  color: #8892a4;
-  transition: color var(--duration-fast) var(--ease-out);
-}
-.app-item--active .app-subtitle { color: #8892a4; }
-.app-item-check {
-  font-size: 12px;
-  margin-left: 6px;
-}
-
-/* Chat area */
+.app-item-content { flex: 1; min-width: 0; }
+.app-name { font-size: 13px; font-weight: 500; color: #e4e7ee; }
+.app-subtitle { font-size: 11px; color: #8892a4; }
+.app-item-check { font-size: 12px; margin-left: 6px; }
 .chat-area {
   flex: 1;
   border-radius: var(--radius-lg);

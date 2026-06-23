@@ -127,8 +127,13 @@ function renderMd(text: string): string {
   }
 }
 
-const props = defineProps<{ appId: number; apiKey: string }>()
-const messages = ref<any[]>([])
+const props = defineProps<{
+  appId: number
+  apiKey: string
+  sessionId?: string
+  initialMessages?: any[]
+}>()
+const messages = ref<any[]>(props.initialMessages || [])
 const inputText = ref('')
 const streaming = ref(false)
 const msgContainer = ref<HTMLDivElement>()
@@ -152,9 +157,11 @@ async function handleSend() {
     const { createSSEConnection } = await import('@/utils/sse')
     const headers: Record<string, string> = {}
     if (props.apiKey) headers['X-API-Key'] = props.apiKey
+    const body: Record<string, any> = { app_id: props.appId, message: text, stream: true }
+    if (props.sessionId) body.session_id = props.sessionId
     createSSEConnection(
       '/api/v1/chat',
-      { app_id: props.appId, message: text, stream: true },
+      body,
       (event, data) => {
         if (event === 'thinking') {
           messages.value.push({ role: 'assistant', type: 'thinking', content: data.content })

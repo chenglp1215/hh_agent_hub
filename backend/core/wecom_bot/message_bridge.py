@@ -237,11 +237,10 @@ class WecomBotBridge:
 
         logger.info(f"Workflow enqueued: trigger={trigger_id}, task={task_id}, session={session_id}")
 
-        # 先回复"正在思考"（使用 reply_stream 保证格式正确）
-        thinking_stream_id = str(uuid.uuid4())
-        await ws_client.reply_stream(frame, thinking_stream_id, "正在思考...", finish=True)
+        # 先回复"正在思考"（finish=False，后续用最终回复覆盖）
+        await ws_client.reply_stream(frame, stream_id, "正在思考...", finish=False)
 
-        # 等待工作流结果（使用 get_result，先查 Redis key 再等 pub/sub 通知）
+        # 等待工作流结果
         try:
             result = await task_queue.get_result(task_id, timeout=300)
 
@@ -257,6 +256,7 @@ class WecomBotBridge:
                     await execution.save(update_fields=["status", "error_message", "completed_at"])
                     logger.error(f"Workflow failed for trigger {trigger_id}: {error}")
                 elif final_answer:
+                    # 用最终回复覆盖"正在思考..."
                     await ws_client.reply_stream(frame, stream_id, final_answer, finish=True)
                     execution.status = "success"
                     execution.completed_at = _now_naive()

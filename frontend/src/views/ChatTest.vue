@@ -19,8 +19,8 @@
           >
             <div class="app-item-indicator" />
             <div class="app-item-content">
-              <div class="text-sm font-medium text-[#e4e7ee] truncate">{{ app.name }}</div>
-              <div class="text-xs text-[#535b6e] truncate">{{ app.workflow_name || '未绑定' }}</div>
+              <div class="app-name truncate">{{ app.name }}</div>
+              <div class="app-subtitle truncate">{{ app.workflow_name || '未绑定' }}</div>
             </div>
             <span v-if="selectedAppId === app.id" class="app-item-check text-[#00d4ff]">&blacktriangleright;</span>
           </div>
@@ -131,6 +131,19 @@ onMounted(async () => {
   flex: 1;
   min-width: 0;
 }
+.app-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #e4e7ee;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+.app-item--active .app-name { color: #e4e7ee; }
+.app-subtitle {
+  font-size: 11px;
+  color: #8892a4;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+.app-item--active .app-subtitle { color: #8892a4; }
 .app-item-check {
   font-size: 12px;
   margin-left: 6px;

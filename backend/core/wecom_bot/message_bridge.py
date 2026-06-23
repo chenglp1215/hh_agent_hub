@@ -296,7 +296,7 @@ class WecomBotBridge:
             status="submitted",
         )
 
-        logger.info(f"Workflow enqueued: trigger={trigger_id}, task={task_id}, session={session_ctx.session_id}, history_len={len(messages_with_history)}")
+        logger.info(f"Workflow enqueued: trigger={trigger_id}, task={task_id}, session={session_ctx.session_id}, history_len={len(history)}")
 
         # 先回复"正在思考"（finish=False，后续用最终回复覆盖）
         await ws_client.reply_stream(frame, stream_id, "正在思考...", finish=False)

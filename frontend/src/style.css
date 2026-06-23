@@ -99,11 +99,11 @@ p, span, div, li, td, th, label, dt, dd { color: inherit; }
    ============================================ */
 
 .font-display {
-  font-family: 'Orbitron', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
   letter-spacing: 0.04em;
 }
 .font-mono {
-  font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', 'Courier New', monospace;
 }
 
 /* ============================================

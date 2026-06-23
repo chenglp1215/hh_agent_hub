@@ -245,7 +245,7 @@ defineExpose({ open, close })
   background: rgba(0, 212, 255, 0.08);
   color: #535b6e;
   font-size: 11px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
   border: 1px solid #1e2538;
 }
 
@@ -313,7 +313,7 @@ defineExpose({ open, close })
   background: rgba(0, 212, 255, 0.06);
   color: #535b6e;
   font-size: 10px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
   margin-left: auto;
 }
 

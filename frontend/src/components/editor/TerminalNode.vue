@@ -34,7 +34,7 @@ defineProps<{ data: { type: string; label: string } }>()
   box-shadow: 0 0 20px rgba(255, 61, 79, 0.1);
 }
 .terminal-node__label {
-  font-family: 'Orbitron', monospace;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.1em;

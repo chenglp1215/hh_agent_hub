@@ -166,7 +166,7 @@ function handleMenuClick({ key }: { key: string }) {
   justify-content: center;
   background: linear-gradient(135deg, #00d4ff, #007acc);
   box-shadow: 0 0 16px rgba(0, 212, 255, 0.3), 0 0 32px rgba(0, 212, 255, 0.1);
-  font-family: 'Orbitron', monospace;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-weight: 700;
   font-size: 14px;
   color: #fff;
@@ -179,7 +179,7 @@ function handleMenuClick({ key }: { key: string }) {
   white-space: nowrap;
 }
 .logo-title {
-  font-family: 'Orbitron', monospace;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 14px;
   font-weight: 700;
   color: #e4e7ee;

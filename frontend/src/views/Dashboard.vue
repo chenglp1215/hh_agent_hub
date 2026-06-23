@@ -284,7 +284,7 @@ onMounted(async () => {
 }
 
 .stat-value {
-  font-family: 'Orbitron', monospace;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 28px;
   font-weight: 700;
   line-height: 1.2;

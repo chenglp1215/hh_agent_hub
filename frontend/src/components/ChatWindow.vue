@@ -332,7 +332,7 @@ async function handleSend() {
   border-radius: 4px;
   font-size: 12px;
   color: #00d4ff;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
 }
 .markdown-body :deep(pre) {
   background: #080c15;

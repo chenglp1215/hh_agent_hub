@@ -262,7 +262,7 @@ async function handleLogin() {
 }
 
 .login-logo-text {
-  font-family: 'Orbitron', monospace;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 24px;
   font-weight: 800;
   color: #fff;
@@ -270,7 +270,7 @@ async function handleLogin() {
 }
 
 .login-title {
-  font-family: 'Orbitron', monospace;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 24px;
   font-weight: 700;
   color: var(--text-primary);

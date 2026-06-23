@@ -198,6 +198,7 @@ async function handleSend() {
   font-size: 13px;
   line-height: 1.55;
   word-break: break-word;
+  color: #e4e7ee;
 }
 
 .msg-user {
@@ -309,6 +310,7 @@ async function handleSend() {
 }
 
 /* Markdown body for chat messages */
+.markdown-body :deep(*) { color: inherit; }
 .markdown-body :deep(table) {
   border-collapse: collapse;
   width: 100%;

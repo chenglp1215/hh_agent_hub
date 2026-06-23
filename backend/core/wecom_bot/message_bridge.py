@@ -19,6 +19,11 @@ from loguru import logger
 BEIJING_TZ = timezone(timedelta(hours=8))
 
 
+def _now_naive() -> datetime:
+    """返回北京时间 naive datetime（与数据库存储一致）"""
+    return datetime.now(BEIJING_TZ).replace(tzinfo=None)
+
+
 class WecomBotBridge:
     """消息桥接器"""
 
@@ -183,7 +188,7 @@ class WecomBotBridge:
         trigger_id = trigger_info["id"]
         app_id = trigger_info["app_id"]
         stream_id = str(uuid.uuid4())
-        now_bj = datetime.now(BEIJING_TZ).replace(tzinfo=None)
+        now_bj = _now_naive()
 
         # 创建 session
         session_id = f"wecom_{trigger_id}_{now_bj.strftime('%Y%m%d%H%M%S')}"
@@ -236,9 +241,13 @@ class WecomBotBridge:
                     final_content = event.get("content", accumulated)
                     await ws_client.reply_stream(frame, stream_id, final_content, finish=True)
                     execution.status = "success"
-                    execution.completed_at = datetime.now(BEIJING_TZ).replace(tzinfo=None)
+                    execution.completed_at = _now_naive()
+                    # 确保两个 datetime 都是 naive 再计算差值
+                    started = execution.started_at
+                    if started.tzinfo is not None:
+                        started = started.astimezone(BEIJING_TZ).replace(tzinfo=None)
                     execution.duration_ms = int(
-                        (execution.completed_at - execution.started_at).total_seconds() * 1000
+                        (execution.completed_at - started).total_seconds() * 1000
                     )
                     await execution.save(update_fields=["status", "completed_at", "duration_ms"])
                     logger.info(f"Workflow completed for trigger {trigger_id}, task {task_id}")
@@ -249,7 +258,7 @@ class WecomBotBridge:
                     await ws_client.reply_stream(frame, stream_id, f"Error: {error_msg}", finish=True)
                     execution.status = "failed"
                     execution.error_message = error_msg
-                    execution.completed_at = datetime.now(BEIJING_TZ).replace(tzinfo=None)
+                    execution.completed_at = _now_naive()
                     await execution.save(update_fields=["status", "error_message", "completed_at"])
                     logger.error(f"Workflow failed for trigger {trigger_id}: {error_msg}")
                     return

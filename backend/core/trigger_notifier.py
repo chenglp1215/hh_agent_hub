@@ -1,7 +1,45 @@
 """触发器执行结果通知 — 企业微信 Webhook"""
 
+import re
+
 import httpx
 from loguru import logger
+
+
+def _convert_tables_for_wecom(text: str) -> str:
+    """将 markdown 表格转换为企业微信友好的格式。
+
+    企业微信 markdown 不支持表格语法，| col | col | 会显示为原始文本。
+    转换为加粗标题 + 缩进列表的形式。
+    """
+    lines = text.split("\n")
+    result = []
+    i = 0
+    while i < len(lines):
+        # 检测表格起始：当前行和下一行都是 | 开头的行
+        if (
+            i + 1 < len(lines)
+            and lines[i].strip().startswith("|")
+            and lines[i + 1].strip().startswith("|")
+            and re.match(r"^\|[\s\-:|]+\|$", lines[i + 1].strip())
+        ):
+            # 解析表头
+            headers = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+            i += 2  # 跳过表头和分隔行
+            # 解析数据行
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+                # 格式：**表头1**: 值1 | **表头2**: 值2
+                parts = []
+                for h, c in zip(headers, cells):
+                    parts.append(f"**{h}**: {c}")
+                result.append("  " + "，".join(parts))
+                i += 1
+            result.append("")  # 表格后空行
+        else:
+            result.append(lines[i])
+            i += 1
+    return "\n".join(result)
 
 
 async def send_trigger_notification(trigger, execution):
@@ -26,8 +64,6 @@ async def send_trigger_notification(trigger, execution):
         duration_text = ""
         if chat_log:
             final_answer = chat_log.final_answer or "(无输出)"
-            if len(final_answer) > 500:
-                final_answer = final_answer[:500] + "..."
             if chat_log.duration_ms:
                 duration_text = f"{chat_log.duration_ms}ms"
 
@@ -54,6 +90,13 @@ async def send_trigger_notification(trigger, execution):
         if execution.error_message:
             md_content += f"\n**错误信息**:\n{execution.error_message}\n"
         elif final_answer:
+            # 企业微信 markdown 不支持表格，需转换
+            final_answer = _convert_tables_for_wecom(final_answer)
+            # 企业微信 markdown 限制 4096 字节，预留头部约 300 字节
+            max_result_len = 3600
+            if len(final_answer.encode("utf-8")) > max_result_len:
+                truncated = final_answer.encode("utf-8")[:max_result_len].decode("utf-8", errors="ignore")
+                final_answer = truncated + "\n...(结果过长，已截断)"
             md_content += f"\n**执行结果**:\n{final_answer}\n"
 
         payload = {

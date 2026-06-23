@@ -6,7 +6,7 @@
       <!-- Left: app list -->
       <div class="app-sidebar glass">
         <div class="app-sidebar-header">
-          <span class="text-xs font-semibold text-[#8892a4] uppercase tracking-wider">应用列表</span>
+          <span class="app-sidebar-title">应用列表</span>
           <a-button size="small" type="link" @click="$router.push('/apps')">管理</a-button>
         </div>
         <div class="app-list">
@@ -22,10 +22,10 @@
               <div class="app-name truncate">{{ app.name }}</div>
               <div class="app-subtitle truncate">{{ app.workflow_name || '未绑定' }}</div>
             </div>
-            <span v-if="selectedAppId === app.id" class="app-item-check text-[#00d4ff]">&blacktriangleright;</span>
+            <span v-if="selectedAppId === app.id" class="app-item-check">&blacktriangleright;</span>
           </div>
         </div>
-        <div v-if="apps.length === 0" class="text-xs text-[#535b6e] text-center py-8">
+        <div v-if="apps.length === 0" class="text-xs text-center py-8" style="color: #535b6e;">
           暂无应用，请先创建
         </div>
       </div>
@@ -173,6 +173,13 @@ onMounted(async () => {
 .app-item-content { flex: 1; min-width: 0; }
 .app-name { font-size: 13px; font-weight: 500; color: #e4e7ee; }
 .app-subtitle { font-size: 11px; color: #8892a4; }
+.app-sidebar-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8892a4;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
 .app-item-check { font-size: 12px; margin-left: 6px; }
 .chat-area {
   flex: 1;

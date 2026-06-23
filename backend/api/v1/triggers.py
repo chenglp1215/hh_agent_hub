@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Query
 from models.trigger import Trigger
 from models.app import App
@@ -12,6 +12,8 @@ from models.session import Session
 from loguru import logger
 
 router = APIRouter(prefix="/triggers", tags=["触发器"])
+
+BEIJING_TZ = timezone(timedelta(hours=8))
 
 
 def _trigger_to_dict(t) -> dict:
@@ -262,7 +264,7 @@ async def execute_trigger(trigger_id: int, user=Depends(get_current_user)):
     )
 
     # 更新 last_fired_at（不改变调度计划）
-    t.last_fired_at = datetime.now()
+    t.last_fired_at = datetime.now(BEIJING_TZ).replace(tzinfo=None)
     await t.save(update_fields=["last_fired_at"])
 
     # 通知在 workflow_executor 任务完成后发送（不在这里发，避免任务未完成就通知）

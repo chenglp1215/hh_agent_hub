@@ -126,13 +126,14 @@ async def _trigger_execute(trigger_id: int):
         return
 
     # 创建临时 session
-    session_id = f"trigger_{trigger_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    now_bj = datetime.now(BEIJING_TZ).replace(tzinfo=None)
+    session_id = f"trigger_{trigger_id}_{now_bj.strftime('%Y%m%d%H%M%S')}"
     session = await Session.create(
         id=session_id,
         app=app,
         user_id="",
         messages=[{"role": "user", "content": trigger.message}],
-        expired_at=datetime.now() + timedelta(hours=1),
+        expired_at=now_bj + timedelta(hours=1),
     )
 
     # 提交到队列
@@ -155,7 +156,7 @@ async def _trigger_execute(trigger_id: int):
     )
 
     # 更新触发时间
-    trigger.last_fired_at = datetime.now()
+    trigger.last_fired_at = datetime.now(BEIJING_TZ).replace(tzinfo=None)
     trigger.next_fire_at = _get_job_next_run_time(trigger_id)
     await trigger.save()
 

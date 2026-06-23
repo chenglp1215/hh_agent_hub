@@ -278,6 +278,8 @@ body {
 .ant-table-tbody > tr > td {
   color: var(--text-primary) !important;
   border-color: var(--border-subtle) !important;
+  background: transparent !important;
+  transition: background var(--duration-fast) var(--ease-out) !important;
 }
 .ant-table-tbody > tr:hover > td {
   background: rgba(0, 212, 255, 0.04) !important;

@@ -95,20 +95,20 @@
               <span class="w-2 h-2 rounded-full bg-[#f0a500]" style="box-shadow: 0 0 6px #f0a500;" />
               <span class="text-sm font-semibold text-[#e4e7ee]">快捷入口</span>
             </div>
-            <div class="space-y-2">
-              <a-button type="primary" block size="large" class="!h-10 !rounded-lg" @click="$router.push('/agents/create')">
+            <div class="flex flex-col gap-3">
+              <a-button type="primary" block size="large" class="!h-11 !rounded-lg !text-sm" @click="$router.push('/agents/create')">
                 <template #icon><PlusOutlined /></template>
                 创建 Agent
               </a-button>
-              <a-button block size="large" class="!h-10 !rounded-lg" @click="$router.push('/workflows/create')">
+              <a-button block size="large" class="!h-11 !rounded-lg !text-sm" @click="$router.push('/workflows/create')">
                 <template #icon><ApartmentOutlined /></template>
                 编排工作流
               </a-button>
-              <a-button block size="large" class="!h-10 !rounded-lg" @click="$router.push('/resources/mcp-servers/create')">
+              <a-button block size="large" class="!h-11 !rounded-lg !text-sm" @click="$router.push('/resources/mcp-servers/create')">
                 <template #icon><ApiOutlined /></template>
                 注册 MCP Server
               </a-button>
-              <a-button block size="large" class="!h-10 !rounded-lg" @click="$router.push('/monitor/chat-test')">
+              <a-button block size="large" class="!h-11 !rounded-lg !text-sm" @click="$router.push('/monitor/chat-test')">
                 <template #icon><MessageOutlined /></template>
                 对话测试
               </a-button>

@@ -29,8 +29,8 @@ RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua
 COPY backend/ ./backend/
 COPY worker/ ./worker/
 
-# 创建数据和日志目录，设置权限
-RUN mkdir -p /data /logs && chown -R appuser:appuser /app /data /logs
+# 创建数据和日志目录，设置权限（main 以 root 创建目录，worker 以 appuser 需要写权限）
+RUN mkdir -p /data /logs && chmod -R 777 /data /logs
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/backend

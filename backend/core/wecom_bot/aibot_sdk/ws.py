@@ -243,6 +243,7 @@ class WsConnectionManager:
         if req_id.startswith(WsCmd.SUBSCRIBE):
             # 认证响应
             errcode = frame.get("errcode")
+            self._logger.info(f"Auth response: {json.dumps(frame, ensure_ascii=False)}")
             if errcode != 0:
                 self._logger.error(
                     f"Authentication failed: errcode={errcode}, errmsg={frame.get('errmsg')}"
@@ -257,7 +258,7 @@ class WsConnectionManager:
             self._logger.info("Authentication successful")
             self._start_heartbeat()
             if self.on_authenticated:
-                self.on_authenticated()
+                self.on_authenticated(frame)
             return
 
         if req_id.startswith(WsCmd.HEARTBEAT):

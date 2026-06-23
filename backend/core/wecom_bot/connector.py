@@ -112,9 +112,9 @@ class WecomBotConnector:
         await self._connect_ws(bot_id, bot_secret)
         logger.info("Reconnected with new credentials")
 
-    def _on_authenticated(self):
+    def _on_authenticated(self, frame=None):
         """认证成功回调"""
-        logger.info("Wecom bot authenticated successfully")
+        logger.info(f"Wecom bot authenticated successfully, response: {frame}")
 
     def _on_message(self, frame):
         """消息回调"""

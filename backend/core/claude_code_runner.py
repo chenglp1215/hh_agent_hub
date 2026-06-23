@@ -105,6 +105,9 @@ class ClaudeCodeRunner:
         self._write_claude_md(agent_workspace, context, project.system_prompt,
                               project_code_path=project_code_path)
 
+        # --- Write .claude/settings.json for permissions ---
+        self._write_claude_settings(agent_workspace, settings)
+
         try:
             return await self._run_sdk(
                 workspace_dir=agent_workspace,
@@ -505,3 +508,23 @@ class ClaudeCodeRunner:
         with open(claude_md_path, "w", encoding="utf-8") as f:
             f.write(content)
         logger.info(f"Written CLAUDE.md to {claude_md_path} (code path: {project_code_path or 'N/A'})")
+
+    def _write_claude_settings(self, work_dir: str, settings) -> None:
+        """将 settings_json 中的权限配置写入 .claude/settings.json"""
+        if not settings.settings_json:
+            return
+        try:
+            extra = json.loads(settings.settings_json)
+        except (json.JSONDecodeError, TypeError):
+            return
+
+        permissions = extra.get("permissions")
+        if not permissions:
+            return
+
+        claude_dir = os.path.join(work_dir, ".claude")
+        os.makedirs(claude_dir, exist_ok=True)
+        settings_path = os.path.join(claude_dir, "settings.json")
+        with open(settings_path, "w", encoding="utf-8") as f:
+            json.dump(permissions, f, ensure_ascii=False, indent=2)
+        logger.info(f"Written .claude/settings.json to {settings_path}")

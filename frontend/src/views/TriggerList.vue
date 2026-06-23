@@ -144,7 +144,7 @@ const columns = [
   { title: '名称', dataIndex: 'name', key: 'name' },
   { title: '类型', key: 'trigger_type', width: 80 },
   { title: '调度配置', key: 'schedule' },
-  { title: '关联应用', key: 'app_name' },
+  { title: '关联应用', dataIndex: 'app_name' },
   { title: '触发消息', key: 'message' },
   { title: '状态', key: 'enabled', width: 80 },
   { title: '上次触发', key: 'last_fired_at' },

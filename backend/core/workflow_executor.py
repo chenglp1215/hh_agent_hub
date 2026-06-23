@@ -265,6 +265,18 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
                                  final_answer, duration_ms, "success",
                                  agent_names=agent_names, trace_data=trace_data)
 
+            # 更新 TriggerExecution 状态
+            try:
+                from models.trigger import TriggerExecution
+                te = await TriggerExecution.filter(task_id=task_id).first()
+                if te:
+                    te.status = "success"
+                    te.duration_ms = duration_ms
+                    te.completed_at = datetime.now()
+                    await te.save(update_fields=["status", "duration_ms", "completed_at"])
+            except Exception as te_err:
+                logger.warning(f"Failed to update TriggerExecution: {te_err}")
+
             await task_queue.publish_result(task_id, {
                 "final_answer": final_answer,
                 "intermediate_results": result.get("intermediate_results", {}),
@@ -291,6 +303,19 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
                                  final_answer, duration_ms, "error",
                                  agent_names=agent_names, trace_data=trace_data,
                                  error_message=str(e))
+
+            # 更新 TriggerExecution 状态为失败
+            try:
+                from models.trigger import TriggerExecution
+                te = await TriggerExecution.filter(task_id=task_id).first()
+                if te:
+                    te.status = "failed"
+                    te.error_message = str(e)[:500]
+                    te.duration_ms = int((time_mod.time() - start) * 1000)
+                    te.completed_at = datetime.now()
+                    await te.save(update_fields=["status", "error_message", "duration_ms", "completed_at"])
+            except Exception as te_err:
+                logger.warning(f"Failed to update TriggerExecution: {te_err}")
         except Exception as log_err:
             logger.warning(f"Failed to save ChatLog: {log_err}")
 

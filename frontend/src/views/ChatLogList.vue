@@ -38,6 +38,9 @@
       class="clickable-table"
     >
       <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'session_id'">
+          <span class="text-xs font-mono text-gray-400">{{ record.session_id }}</span>
+        </template>
         <template v-if="column.key === 'status'">
           <a-tag :color="record.status === 'success' ? 'green' : 'red'">
             {{ record.status === 'success' ? '成功' : '失败' }}
@@ -159,6 +162,7 @@ const traceList = ref<any[]>([])
 
 const tableColumns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
+  { title: '会话ID', key: 'session_id', width: 180 },
   { title: '用户问题', key: 'user_input', width: 200 },
   { title: '回复', key: 'final_answer', ellipsis: true },
   { title: '耗时', key: 'duration', width: 80 },

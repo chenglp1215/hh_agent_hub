@@ -1,16 +1,21 @@
 # ============================================
 # 企微机器人 WS 连接器
+# 与 main Dockerfile 共享相同的系统依赖层，利用 Docker 缓存
 # ============================================
 FROM python:3.11-slim
 
 LABEL app="hh-agent-hub-wecom-bot"
 LABEL description="WeCom Bot WebSocket Connector"
 
-# 系统依赖
+# 系统依赖 (与主 Dockerfile 保持一致以复用缓存层)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libmariadb-dev \
-    && rm -rf /var/lib/apt/lists/*
+    git \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g @anthropic-ai/claude-code
 
 WORKDIR /app
 

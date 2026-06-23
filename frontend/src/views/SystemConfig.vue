@@ -127,7 +127,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import client from '@/api/client'
 
@@ -158,7 +158,6 @@ async function fetchWecomBotStatus() {
     Object.assign(wecomBotStatus, data)
   } catch {}
 }
-})
 
 async function saveWecomConfig() {
   if (!wecomForm.bot_id || !wecomForm.bot_secret) {

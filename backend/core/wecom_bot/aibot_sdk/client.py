@@ -61,9 +61,9 @@ class WSClient(AsyncIOEventEmitter):
         """设置 WebSocket 事件处理"""
         self._ws_manager.on_connected = lambda: self.emit("connected")
 
-        def _on_authenticated() -> None:
+        def _on_authenticated(frame=None) -> None:
             self._logger.info("Authenticated")
-            self.emit("authenticated")
+            self.emit("authenticated", frame)
 
         self._ws_manager.on_authenticated = _on_authenticated
 

@@ -104,9 +104,8 @@ async def get_dashboard_stats(user=Depends(get_current_user)):
         tq = get_task_queue()
         await tq.connect()
         queue_depth = await tq._redis.llen("workflow:queue")
-        # 活跃任务数 — 使用专用 key 追踪
-        active_val = await tq._redis.get("workflow:active_count")
-        active_tasks = int(active_val) if active_val else 0
+        # 活跃任务数 — 使用 Set 精确追踪
+        active_tasks = await tq._redis.scard("workflow:active_tasks")
     except Exception:
         pass
 

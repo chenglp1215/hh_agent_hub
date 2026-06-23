@@ -5,23 +5,38 @@
 2. 接收 aibot 消息回调，匹配触发器
 3. 处理验证码匹配逻辑
 4. 触发 workflow 执行并流式回复结果
+5. 维护同一聊天的会话上下文（10 条消息窗口）
 """
 
 import asyncio
 import json
+import re
 import uuid
+from collections import deque
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional, Tuple
 
 from loguru import logger
 
 
 BEIJING_TZ = timezone(timedelta(hours=8))
+MAX_HISTORY = 10  # 会话历史最大消息数
 
 
 def _now_naive() -> datetime:
     """返回北京时间 naive datetime（与数据库存储一致）"""
     return datetime.now(BEIJING_TZ).replace(tzinfo=None)
+
+
+@dataclass
+class SessionContext:
+    """会话上下文"""
+    session_id: str
+    trigger_id: int
+    chat_key: str  # "group:{chatid}" 或 "user:{userid}"
+    messages: deque = field(default_factory=lambda: deque(maxlen=MAX_HISTORY))
+    last_active: datetime = field(default_factory=_now_naive)
 
 
 class WecomBotBridge:
@@ -31,6 +46,8 @@ class WecomBotBridge:
         self._redis = redis_client
         # (chat_type, chat_id) -> trigger dict
         self._trigger_map: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        # (trigger_id, chat_key) -> SessionContext
+        self._sessions: Dict[Tuple[int, str], SessionContext] = {}
 
     async def load_mappings(self):
         """从数据库加载所有 wecom_bot 类型的启用触发器"""
@@ -67,18 +84,44 @@ class WecomBotBridge:
         logger.info("Refreshing wecom_bot trigger mappings...")
         await self.load_mappings()
 
+    def _get_or_create_session(self, trigger_id: int, chat_key: str) -> SessionContext:
+        """获取或创建会话上下文"""
+        key = (trigger_id, chat_key)
+        ctx = self._sessions.get(key)
+        if ctx:
+            ctx.last_active = _now_naive()
+            return ctx
+
+        # 创建新会话
+        now = _now_naive()
+        session_id = f"wecom_{trigger_id}_{now.strftime('%Y%m%d%H%M%S')}"
+        ctx = SessionContext(
+            session_id=session_id,
+            trigger_id=trigger_id,
+            chat_key=chat_key,
+        )
+        self._sessions[key] = ctx
+        logger.info(f"Created new session {session_id} for trigger={trigger_id}, chat={chat_key}")
+        return ctx
+
+    def _cleanup_expired_sessions(self):
+        """清理超过 30 分钟无活动的会话"""
+        now = _now_naive()
+        expired_keys = [
+            k for k, ctx in self._sessions.items()
+            if (now - ctx.last_active).total_seconds() > 1800
+        ]
+        for k in expired_keys:
+            del self._sessions[k]
+            logger.info(f"Cleaned up expired session: {k}")
+
     @staticmethod
     def _strip_at_mention(content: str) -> str:
         """清理消息中的 @机器人名
 
         群聊中 @机器人 发消息时，企微会在消息开头或末尾附加 @机器人名。
-        例如: "@运营服务研发智能机器人 你好" → "你好"
-        例如: "7I6P85@运营服务研发智能机器人 " → "7I6P85"
         """
-        import re
-        # 清理开头的 @xxx（含空格）
         cleaned = re.sub(r'^@[^\s@]+\s*', '', content)
-        # 清理末尾的 @xxx（含空格）
         cleaned = re.sub(r'\s*@[^\s@]+\s*$', '', cleaned)
         return cleaned.strip()
 
@@ -190,11 +233,15 @@ class WecomBotBridge:
 
         logger.info(f"Message matched trigger {trigger_info['id']} ({trigger_info['name']})")
 
+        # 定期清理过期会话
+        self._cleanup_expired_sessions()
+
         # 执行工作流
-        await self._execute_workflow(trigger_info, content, frame, ws_client)
+        await self._execute_workflow(trigger_info, content, chatid, userid, frame, ws_client)
 
     async def _execute_workflow(
         self, trigger_info: Dict[str, Any], user_message: str,
+        chatid: str, userid: str,
         frame: Dict[str, Any], ws_client
     ) -> None:
         """执行工作流并流式回复"""
@@ -205,23 +252,37 @@ class WecomBotBridge:
         trigger_id = trigger_info["id"]
         app_id = trigger_info["app_id"]
         stream_id = str(uuid.uuid4())
-        now_bj = _now_naive()
 
-        # 创建 session
-        session_id = f"wecom_{trigger_id}_{now_bj.strftime('%Y%m%d%H%M%S')}"
-        session = await Session.create(
-            id=session_id,
-            app_id=app_id,
-            user_id="wecom_bot",
-            messages=[{"role": "user", "content": user_message}],
-            expired_at=now_bj + timedelta(hours=1),
-        )
+        # 获取或创建会话上下文
+        chat_key = f"group:{chatid}" if chatid else f"user:{userid}"
+        session_ctx = self._get_or_create_session(trigger_id, chat_key)
 
-        # 入队任务
+        # 构建历史消息（不包含当前用户消息，因为 build_workflow 会自动追加）
+        history = list(session_ctx.messages)
+
+        # 创建或更新 session 记录（messages 只存历史，不含当前消息）
+        now = _now_naive()
+        session = await Session.get_or_none(id=session_ctx.session_id)
+        if session:
+            session.messages = history
+            session.updated_at = now
+            session.expired_at = now + timedelta(hours=1)
+            await session.save(update_fields=["messages", "updated_at", "expired_at"])
+        else:
+            session = await Session.create(
+                id=session_ctx.session_id,
+                app_id=app_id,
+                user_id="wecom_bot",
+                messages=history,
+                expired_at=now + timedelta(hours=1),
+            )
+
+        # 入队任务（消息内容包含历史上下文）
         task_queue = get_task_queue()
+        # 将完整消息历史作为 message 传入（workflow 会读取 session.messages）
         task_id = await task_queue.enqueue(
             app_id=app_id,
-            session_id=session_id,
+            session_id=session_ctx.session_id,
             message=user_message,
             stream=True,
         )
@@ -229,13 +290,13 @@ class WecomBotBridge:
         # 写入执行记录
         execution = await TriggerExecution.create(
             trigger_id=trigger_id,
-            session_id=session_id,
+            session_id=session_ctx.session_id,
             task_id=task_id,
             source="auto",
             status="submitted",
         )
 
-        logger.info(f"Workflow enqueued: trigger={trigger_id}, task={task_id}, session={session_id}")
+        logger.info(f"Workflow enqueued: trigger={trigger_id}, task={task_id}, session={session_ctx.session_id}, history_len={len(messages_with_history)}")
 
         # 先回复"正在思考"（finish=False，后续用最终回复覆盖）
         await ws_client.reply_stream(frame, stream_id, "正在思考...", finish=False)
@@ -258,6 +319,16 @@ class WecomBotBridge:
                 elif final_answer:
                     # 用最终回复覆盖"正在思考..."
                     await ws_client.reply_stream(frame, stream_id, final_answer, finish=True)
+
+                    # 追加用户消息和助手回复到会话历史
+                    session_ctx.messages.append({"role": "user", "content": user_message})
+                    session_ctx.messages.append({"role": "assistant", "content": final_answer})
+
+                    # 更新 session 记录（含完整历史）
+                    session.messages = list(session_ctx.messages)
+                    session.updated_at = _now_naive()
+                    await session.save(update_fields=["messages", "updated_at"])
+
                     execution.status = "success"
                     execution.completed_at = _now_naive()
                     started = execution.started_at
@@ -267,7 +338,7 @@ class WecomBotBridge:
                         (execution.completed_at - started).total_seconds() * 1000
                     )
                     await execution.save(update_fields=["status", "completed_at", "duration_ms"])
-                    logger.info(f"Workflow completed for trigger {trigger_id}, task {task_id}, answer_len={len(final_answer)}")
+                    logger.info(f"Workflow completed for trigger {trigger_id}, task={task_id}, answer_len={len(final_answer)}, history_len={len(session_ctx.messages)}")
                 else:
                     await ws_client.reply_stream(frame, stream_id, "Error: 工作流未返回结果", finish=True)
                     execution.status = "failed"

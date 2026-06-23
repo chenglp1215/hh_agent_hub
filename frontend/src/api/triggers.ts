@@ -7,4 +7,6 @@ export const triggersApi = {
   update: (id: number, data: any) => client.put(`/triggers/${id}`, data),
   delete: (id: number) => client.delete(`/triggers/${id}`),
   execute: (id: number) => client.post(`/triggers/${id}/execute`),
+  executions: (id: number, params?: { page?: number; page_size?: number }) =>
+    client.get(`/triggers/${id}/executions`, { params }),
 }

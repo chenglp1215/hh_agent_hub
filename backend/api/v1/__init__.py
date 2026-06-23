@@ -71,6 +71,10 @@ from api.v1.triggers import router as triggers_router
 router.include_router(triggers_router)
 
 
+from api.v1.notifications import router as notifications_router
+router.include_router(notifications_router)
+
+
 @router.get("/ping")
 async def ping():
     return {"ping": "pong"}

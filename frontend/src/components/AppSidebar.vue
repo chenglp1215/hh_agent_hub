@@ -63,8 +63,9 @@
         <template #icon>
           <span class="menu-icon"><FieldTimeOutlined /></span>
         </template>
-        <template #title>触发器管理</template>
+        <template #title>执行管理</template>
         <a-menu-item key="/triggers">触发器列表</a-menu-item>
+        <a-menu-item key="/notifications">通知管理</a-menu-item>
       </a-sub-menu>
 
       <a-sub-menu key="resources" class="menu-sub">

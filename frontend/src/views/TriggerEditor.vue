@@ -79,6 +79,22 @@
           <a-textarea v-model:value="form.message" :rows="3" placeholder="输入触发时发送的 Chat 消息内容" />
         </a-form-item>
 
+        <a-form-item label="通知渠道">
+          <a-select
+            v-model:value="form.notification_id"
+            placeholder="选择通知渠道（可选）"
+            allow-clear
+          >
+            <a-select-option
+              v-for="ch in notificationChannels"
+              :key="ch.id"
+              :value="ch.id"
+            >
+              {{ ch.name }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+
         <a-form-item>
           <a-space>
             <a-button type="primary" html-type="submit" :loading="submitting">保存</a-button>
@@ -96,12 +112,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { triggersApi } from '@/api/triggers'
 import { appsApi } from '@/api/apps'
+import { notificationsApi } from '@/api/notifications'
 
 const route = useRoute()
 const router = useRouter()
 const isEdit = computed(() => !!route.params.id)
 const submitting = ref(false)
 const enabledApps = ref<any[]>([])
+const notificationChannels = ref<any[]>([])
 
 const form = ref({
   name: '',
@@ -112,6 +130,7 @@ const form = ref({
   cron_expression: '',
   app_id: undefined as number | undefined,
   message: '',
+  notification_id: undefined as number | undefined,
 })
 
 function setCronPreset(expr: string) {
@@ -119,9 +138,13 @@ function setCronPreset(expr: string) {
 }
 
 onMounted(async () => {
-  // 加载已启用的应用列表
-  const res = await appsApi.list()
-  enabledApps.value = (res.data.data || []).filter((a: any) => a.enabled)
+  // 加载已启用的应用列表和通知渠道列表
+  const [appsRes, notifRes] = await Promise.all([
+    appsApi.list(),
+    notificationsApi.list(),
+  ])
+  enabledApps.value = (appsRes.data.data || []).filter((a: any) => a.enabled)
+  notificationChannels.value = notifRes.data.data || []
 
   if (isEdit.value) {
     const res = await triggersApi.get(Number(route.params.id))
@@ -135,6 +158,7 @@ onMounted(async () => {
       cron_expression: d.cron_expression || '',
       app_id: d.app_id,
       message: d.message,
+      notification_id: d.notification_id || undefined,
     }
   }
 })

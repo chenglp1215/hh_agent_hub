@@ -27,6 +27,10 @@ const router = createRouter({
         { path: 'triggers', name: 'TriggerList', component: () => import('@/views/TriggerList.vue'), meta: { title: '触发器管理' } },
         { path: 'triggers/create', name: 'TriggerCreate', component: () => import('@/views/TriggerEditor.vue'), meta: { title: '创建触发器' } },
         { path: 'triggers/:id/edit', name: 'TriggerEdit', component: () => import('@/views/TriggerEditor.vue'), meta: { title: '编辑触发器' }, props: true },
+        // Notification channels
+        { path: 'notifications', name: 'NotificationList', component: () => import('@/views/NotificationList.vue'), meta: { title: '通知管理' } },
+        { path: 'notifications/create', name: 'NotificationCreate', component: () => import('@/views/NotificationEditor.vue'), meta: { title: '创建通知渠道' } },
+        { path: 'notifications/:id/edit', name: 'NotificationEdit', component: () => import('@/views/NotificationEditor.vue'), meta: { title: '编辑通知渠道' }, props: true },
         // Resource directory - MCP Servers
         { path: 'resources/mcp-servers', name: 'McpServerList', component: () => import('@/views/McpServerList.vue'), meta: { title: 'MCP Server 管理' } },
         { path: 'resources/mcp-servers/create', name: 'McpServerCreate', component: () => import('@/views/McpServerEditor.vue'), meta: { title: '注册 MCP Server' } },

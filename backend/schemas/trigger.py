@@ -14,6 +14,17 @@ class IntervalUnitEnum(str, Enum):
     days = "days"
 
 
+class ExecutionSourceEnum(str, Enum):
+    auto = "auto"
+    manual = "manual"
+
+
+class ExecutionStatusEnum(str, Enum):
+    submitted = "submitted"
+    success = "success"
+    failed = "failed"
+
+
 class TriggerCreate(BaseModel):
     """创建触发器的请求体"""
     name: str = Field(..., min_length=1, max_length=100)
@@ -24,6 +35,7 @@ class TriggerCreate(BaseModel):
     cron_expression: Optional[str] = Field(None, max_length=100)
     app_id: int
     message: str = Field(..., min_length=1)
+    notification_id: Optional[int] = None
 
     class Config:
         use_enum_values = True
@@ -40,6 +52,22 @@ class TriggerUpdate(BaseModel):
     app_id: Optional[int] = None
     message: Optional[str] = Field(None, min_length=1)
     enabled: Optional[bool] = None
+    notification_id: Optional[int] = None
 
     class Config:
         use_enum_values = True
+
+
+class NotificationCreate(BaseModel):
+    """创建通知渠道的请求体"""
+    name: str = Field(..., min_length=1, max_length=100)
+    channel_type: str = Field("wecom_webhook", max_length=20)
+    webhook_url: str = Field(..., min_length=1, max_length=500)
+
+
+class NotificationUpdate(BaseModel):
+    """更新通知渠道的请求体，所有字段可选"""
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    channel_type: Optional[str] = Field(None, max_length=20)
+    webhook_url: Optional[str] = Field(None, min_length=1, max_length=500)
+    enabled: Optional[bool] = None

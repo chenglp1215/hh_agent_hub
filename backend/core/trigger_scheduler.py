@@ -144,10 +144,25 @@ async def _trigger_execute(trigger_id: int):
         stream=False,
     )
 
+    # 写入执行记录
+    from models.trigger import TriggerExecution
+    execution = await TriggerExecution.create(
+        trigger=trigger,
+        session_id=session_id,
+        task_id=task_id,
+        source="auto",
+        status="submitted",
+    )
+
     # 更新触发时间
     trigger.last_fired_at = datetime.now()
     trigger.next_fire_at = _get_job_next_run_time(trigger_id)
     await trigger.save()
+
+    # fire-and-forget 发送通知
+    from core.trigger_notifier import send_trigger_notification
+    import asyncio
+    asyncio.create_task(send_trigger_notification(trigger, execution))
 
     logger.info(f"Trigger {trigger_id} executed, task_id={task_id}, session_id={session_id}")
 

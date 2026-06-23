@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from models.trigger import Trigger
 from models.app import App
 from schemas.trigger import TriggerCreate, TriggerUpdate
@@ -28,10 +28,28 @@ def _trigger_to_dict(t) -> dict:
         "app_name": t.app.name if hasattr(t, "app") and t.app else None,
         "message": t.message,
         "enabled": t.enabled,
+        "notification_id": t.notification_id,
         "last_fired_at": t.last_fired_at.isoformat() if t.last_fired_at else None,
         "next_fire_at": t.next_fire_at.isoformat() if t.next_fire_at else None,
         "created_at": t.created_at.isoformat() if t.created_at else None,
         "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+    }
+
+
+def _execution_to_dict(e) -> dict:
+    """将 TriggerExecution 对象转为字典"""
+    return {
+        "id": e.id,
+        "trigger_id": e.trigger_id,
+        "session_id": e.session_id,
+        "task_id": e.task_id,
+        "source": e.source,
+        "status": e.status,
+        "error_message": e.error_message,
+        "duration_ms": e.duration_ms,
+        "notified": e.notified,
+        "started_at": e.started_at.isoformat() if e.started_at else None,
+        "completed_at": e.completed_at.isoformat() if e.completed_at else None,
     }
 
 
@@ -80,6 +98,13 @@ async def create_trigger(body: TriggerCreate, user=Depends(get_current_user)):
     if existing:
         return error(code=400, message="触发器名称已存在")
 
+    # 校验通知渠道
+    if body.notification_id:
+        from models.trigger import NotificationChannel
+        nc = await NotificationChannel.get_or_none(id=body.notification_id)
+        if not nc:
+            return error(code=400, message="通知渠道不存在")
+
     t = await Trigger.create(
         name=body.name,
         description=body.description,
@@ -90,6 +115,7 @@ async def create_trigger(body: TriggerCreate, user=Depends(get_current_user)):
         app=app,
         message=body.message,
         enabled=True,
+        notification_id=body.notification_id,
         created_by=user if user.id else None,
     )
 
@@ -152,6 +178,14 @@ async def update_trigger(trigger_id: int, body: TriggerUpdate, user=Depends(get_
     if body.enabled is not None:
         t.enabled = body.enabled
         update_fields.append("enabled")
+    if body.notification_id is not None:
+        if body.notification_id:
+            from models.trigger import NotificationChannel
+            nc = await NotificationChannel.get_or_none(id=body.notification_id)
+            if not nc:
+                return error(code=400, message="通知渠道不存在")
+        t.notification_id = body.notification_id
+        update_fields.append("notification_id")
 
     t.updated_at = datetime.now()
     update_fields.append("updated_at")
@@ -217,9 +251,24 @@ async def execute_trigger(trigger_id: int, user=Depends(get_current_user)):
         stream=False,
     )
 
+    # 写入执行记录
+    from models.trigger import TriggerExecution
+    execution = await TriggerExecution.create(
+        trigger=t,
+        session_id=session_id,
+        task_id=task_id,
+        source="manual",
+        status="submitted",
+    )
+
     # 更新 last_fired_at（不改变调度计划）
     t.last_fired_at = datetime.now()
     await t.save(update_fields=["last_fired_at"])
+
+    # fire-and-forget 发送通知
+    from core.trigger_notifier import send_trigger_notification
+    import asyncio
+    asyncio.create_task(send_trigger_notification(t, execution))
 
     logger.info(f"Manual trigger {trigger_id} executed, task_id={task_id}")
 
@@ -227,3 +276,32 @@ async def execute_trigger(trigger_id: int, user=Depends(get_current_user)):
         "task_id": task_id,
         "session_id": session_id,
     }, message="已触发执行")
+
+
+@router.get("/{trigger_id}/executions")
+async def list_trigger_executions(
+    trigger_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    user=Depends(get_current_user),
+):
+    """获取触发器执行历史（分页）"""
+    from models.trigger import TriggerExecution
+
+    trigger = await Trigger.get_or_none(id=trigger_id)
+    if not trigger:
+        return error(code=404, message="触发器不存在")
+
+    offset = (page - 1) * page_size
+    total = await TriggerExecution.filter(trigger_id=trigger_id).count()
+    items = await TriggerExecution.filter(trigger_id=trigger_id) \
+        .order_by("-started_at") \
+        .offset(offset) \
+        .limit(page_size)
+
+    return success(data={
+        "total": total,
+        "items": [_execution_to_dict(e) for e in items],
+        "page": page,
+        "page_size": page_size,
+    })

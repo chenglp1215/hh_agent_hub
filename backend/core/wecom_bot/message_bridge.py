@@ -68,16 +68,18 @@ class WecomBotBridge:
         await self.load_mappings()
 
     @staticmethod
-    def _strip_at_suffix(content: str) -> str:
-        """清理消息末尾的 @机器人名 后缀
+    def _strip_at_mention(content: str) -> str:
+        """清理消息中的 @机器人名
 
-        群聊中 @机器人 发消息时，企微会在末尾附加 @机器人名。
+        群聊中 @机器人 发消息时，企微会在消息开头或末尾附加 @机器人名。
+        例如: "@运营服务研发智能机器人 你好" → "你好"
         例如: "7I6P85@运营服务研发智能机器人 " → "7I6P85"
         """
-        # 匹配末尾的 @xxx（可能有空格），只清理最后一个
         import re
-        # 末尾 @+中文/英文/数字/下划线，前后可能有空格
-        cleaned = re.sub(r'\s*@[^\s@]+\s*$', '', content)
+        # 清理开头的 @xxx（含空格）
+        cleaned = re.sub(r'^@[^\s@]+\s*', '', content)
+        # 清理末尾的 @xxx（含空格）
+        cleaned = re.sub(r'\s*@[^\s@]+\s*$', '', cleaned)
         return cleaned.strip()
 
     async def handle_message(self, frame: Dict[str, Any], ws_client) -> None:
@@ -100,9 +102,8 @@ class WecomBotBridge:
             return
 
         content = body.get("text", {}).get("content", "").strip()
-        # 群聊 @机器人 时，消息可能带 @机器人名 后缀，如 "7I6P85@机器人名"
-        # 只清理末尾的 @xxx 后缀，保留消息中间的 @
-        content = self._strip_at_suffix(content)
+        # 群聊 @机器人 时，消息可能带 @机器人名 前缀或后缀
+        content = self._strip_at_mention(content)
         logger.info(f"Text content (cleaned): '{content}'")
 
         # 检查是否是验证码
@@ -236,11 +237,9 @@ class WecomBotBridge:
 
         logger.info(f"Workflow enqueued: trigger={trigger_id}, task={task_id}, session={session_id}")
 
-        # 先回复"正在思考"
-        await self._reply_text(ws_client, frame,
-            frame.get("body", {}).get("from", {}).get("chatid", ""),
-            frame.get("body", {}).get("from", {}).get("userid", ""),
-            "正在思考...")
+        # 先回复"正在思考"（使用 reply_stream 保证格式正确）
+        thinking_stream_id = str(uuid.uuid4())
+        await ws_client.reply_stream(frame, thinking_stream_id, "正在思考...", finish=True)
 
         # 订阅流式事件并回复
         accumulated = ""

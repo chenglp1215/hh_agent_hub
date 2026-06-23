@@ -25,6 +25,8 @@ async def seed_defaults():
         ("system.max_tokens", "4096", "number", "最大token限制"),
         ("system.session_ttl", "3600", "number", "会话过期时间(秒)"),
         ("system.rate_limit.default", "60", "number", "默认限流(次/分钟)"),
+        ("wecom.bot_id", "", "secret", "企微智能机器人 Bot ID"),
+        ("wecom.bot_secret", "", "secret", "企微智能机器人 Bot Secret"),
     ]
     for key, value, ctype, desc in defaults:
         await SysConfig.get_or_create(

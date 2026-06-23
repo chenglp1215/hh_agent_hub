@@ -9,6 +9,7 @@
   6. 结果回写 DB + 通过 task_queue 发布
 """
 
+import asyncio
 import os
 import time as time_mod
 from datetime import datetime
@@ -242,8 +243,28 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
             })
 
         else:
-            # ── 非流式执行 ──
-            result = await graph.ainvoke(initial_state)
+            # ── 非流式执行（触发器任务自动重试 LLM 风控误拦） ──
+            max_retries = 2 if session_id.startswith("trigger_") else 0
+            result = None
+            last_error = None
+            for attempt in range(max_retries + 1):
+                try:
+                    result = await graph.ainvoke(initial_state)
+                    break
+                except Exception as e:
+                    err_str = str(e)
+                    # 仅对 LLM 内容风控错误重试，其他错误直接抛出
+                    if attempt < max_retries and ("risk" in err_str.lower() or "400" in err_str):
+                        logger.warning(
+                            f"Task {task_id} attempt {attempt + 1} failed (content moderation), "
+                            f"retrying in 3s: {err_str[:200]}"
+                        )
+                        await asyncio.sleep(3)
+                        last_error = e
+                    else:
+                        raise
+            if result is None and last_error:
+                raise last_error
             duration_ms = int((time_mod.time() - start) * 1000)
 
             final_answer = result.get("final_answer", "")

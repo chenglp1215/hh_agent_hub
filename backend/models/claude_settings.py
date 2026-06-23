@@ -8,7 +8,7 @@ class ClaudeSettingsRegistry(Model):
     description = fields.TextField(null=True)
     model = fields.CharField(max_length=100, default="claude-sonnet-4-6")
     max_turns = fields.IntField(default=25)
-    permission_mode = fields.CharField(max_length=50, default="acceptEdits")
+    permission_mode = fields.CharField(max_length=50, default="default")
     settings_json = fields.TextField(null=True)
     status = fields.CharField(max_length=20, default="active")
     created_by = fields.ForeignKeyField("models.User", null=True, on_delete=fields.SET_NULL)

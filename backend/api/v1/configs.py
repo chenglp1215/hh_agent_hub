@@ -32,6 +32,29 @@ async def list_configs(_=Depends(require_admin)):
     } for c in configs])
 
 
+@router.get("/wecom-bot-status")
+async def get_wecom_bot_status(_=Depends(require_admin)):
+    """获取企微机器人连接状态"""
+    try:
+        from core.task_queue import get_task_queue
+        tq = get_task_queue()
+        await tq.connect()
+        status_json = await tq._redis.get("wecom_bot:status")
+        if status_json:
+            import json
+            return success(data=json.loads(status_json))
+        return success(data={
+            "connected": False,
+            "bot_id": "",
+            "bot_name": "",
+            "connected_at": "",
+            "updated_at": "",
+        })
+    except Exception as e:
+        logger.warning(f"Failed to get wecom bot status: {e}")
+        return success(data={"connected": False, "bot_id": "", "bot_name": ""})
+
+
 @router.put("/{key}")
 async def update_config(key: str, body: SysConfigUpdate, _=Depends(require_admin)):
     config = await SysConfig.get_or_none(config_key=key)

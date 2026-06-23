@@ -5,10 +5,12 @@
 2. 创建 WSClient 并连接
 3. 注册消息回调到 WecomBotBridge
 4. 监听 Redis pub/sub 刷新触发器映射和凭证
+5. 在 Redis 中存储连接状态供前端展示
 """
 
 import asyncio
 import json
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from loguru import logger
@@ -17,6 +19,9 @@ from redis.asyncio import Redis
 from core.wecom_bot.aibot_sdk.client import WSClient
 from core.wecom_bot.aibot_sdk.types import WSClientOptions
 from core.wecom_bot.message_bridge import WecomBotBridge
+
+BEIJING_TZ = timezone(timedelta(hours=8))
+STATUS_KEY = "wecom_bot:status"
 
 
 class WecomBotConnector:
@@ -28,6 +33,7 @@ class WecomBotConnector:
         self._ws_client: Optional[WSClient] = None
         self._bridge: Optional[WecomBotBridge] = None
         self._running = False
+        self._bot_id = ""
 
     async def start(self):
         """启动连接器"""
@@ -45,6 +51,8 @@ class WecomBotConnector:
             logger.warning("Wecom bot credentials not configured, entering retry loop...")
             bot_id, bot_secret = await self._wait_for_credentials()
 
+        self._bot_id = bot_id
+
         # 创建消息桥接器
         self._bridge = WecomBotBridge(self._redis)
         await self._bridge.load_mappings()
@@ -56,6 +64,18 @@ class WecomBotConnector:
         asyncio.create_task(self._listen_refresh())
 
         logger.info("WecomBotConnector started successfully")
+
+    async def _update_status(self, connected: bool, bot_name: str = ""):
+        """更新 Redis 中的连接状态"""
+        now = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S")
+        status = {
+            "connected": connected,
+            "bot_id": self._bot_id,
+            "bot_name": bot_name,
+            "connected_at": now if connected else "",
+            "updated_at": now,
+        }
+        await self._redis.set(STATUS_KEY, json.dumps(status, ensure_ascii=False))
 
     async def _connect_ws(self, bot_id: str, bot_secret: str):
         """创建并连接 WSClient"""
@@ -109,12 +129,14 @@ class WecomBotConnector:
             logger.warning("New credentials are empty, entering retry loop...")
             bot_id, bot_secret = await self._wait_for_credentials()
 
+        self._bot_id = bot_id
         await self._connect_ws(bot_id, bot_secret)
         logger.info("Reconnected with new credentials")
 
     def _on_authenticated(self, frame=None):
         """认证成功回调"""
-        logger.info(f"Wecom bot authenticated successfully, response: {frame}")
+        logger.info("Wecom bot authenticated successfully")
+        asyncio.ensure_future(self._update_status(connected=True))
 
     def _on_message(self, frame):
         """消息回调"""
@@ -128,6 +150,7 @@ class WecomBotConnector:
     def _on_disconnected(self, reason):
         """断开连接回调"""
         logger.warning(f"Wecom bot disconnected: {reason}")
+        asyncio.ensure_future(self._update_status(connected=False))
 
     async def _listen_refresh(self):
         """监听 Redis pub/sub 刷新触发器映射和凭证"""
@@ -158,5 +181,6 @@ class WecomBotConnector:
         if self._ws_client:
             self._ws_client.disconnect()
         if self._redis:
+            await self._update_status(connected=False)
             await self._redis.close()
         logger.info("WecomBotConnector stopped")

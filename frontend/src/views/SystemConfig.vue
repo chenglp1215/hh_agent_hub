@@ -55,6 +55,25 @@
     </a-card>
 
     <a-card title="企微智能机器人" class="max-w-2xl mb-4">
+      <!-- 连接状态 -->
+      <div class="mb-4 p-3 rounded" style="background: var(--surface-1); border: 1px solid var(--border)">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm text-gray-400">连接状态</span>
+          <a-tag v-if="wecomBotStatus.connected" color="green">已连接</a-tag>
+          <a-tag v-else color="default">未连接</a-tag>
+        </div>
+        <template v-if="wecomBotStatus.connected">
+          <div v-if="wecomBotStatus.bot_id" class="flex items-center justify-between text-sm">
+            <span class="text-gray-400">Bot ID</span>
+            <code class="text-xs">{{ wecomBotStatus.bot_id }}</code>
+          </div>
+          <div v-if="wecomBotStatus.connected_at" class="flex items-center justify-between text-sm mt-1">
+            <span class="text-gray-400">连接时间</span>
+            <span>{{ wecomBotStatus.connected_at }}</span>
+          </div>
+        </template>
+      </div>
+
       <a-form layout="vertical">
         <a-form-item label="Bot ID">
           <a-input-password
@@ -73,14 +92,20 @@
             <a-button type="primary" :loading="wecomSaving" @click="saveWecomConfig">
               保存配置
             </a-button>
-            <a-tag v-if="wecomBotStatus === 'configured'" color="green">已配置</a-tag>
+            <a-tag v-if="wecomForm.bot_id || wecomForm.bot_secret" color="green">已配置</a-tag>
+            <a-tag v-else-if="wecomBotStatus.bot_id" color="green">已配置</a-tag>
             <a-tag v-else color="default">未配置</a-tag>
           </a-space>
         </a-form-item>
       </a-form>
-      <a-alert v-if="wecomBotStatus === 'configured'" type="success" show-icon>
+      <a-alert v-if="wecomBotStatus.connected" type="success" show-icon>
         <template #message>
-          <div>已配置，wecom-bot 容器将自动连接企微智能机器人。</div>
+          <div>企微智能机器人已连接，用户发送的消息将自动触发关联应用。</div>
+        </template>
+      </a-alert>
+      <a-alert v-else-if="wecomForm.bot_id || wecomBotStatus.bot_id" type="warning" show-icon>
+        <template #message>
+          <div>已配置凭证，等待 wecom-bot 容器连接... 如长时间未连接，请检查容器日志。</div>
         </template>
       </a-alert>
       <a-alert v-else type="info" show-icon>
@@ -118,10 +143,21 @@ const wecomForm = reactive({
   bot_secret: '',
 })
 const wecomSaving = ref(false)
-const wecomBotStatus = computed(() => {
-  const id = configs.value.find((c: any) => c.config_key === 'wecom.bot_id')
-  // secret 类型返回 "***" 也算已配置；空字符串表示未配置
-  return id && id.config_value && id.config_value !== '' ? 'configured' : 'unconfigured'
+const wecomBotStatus = reactive({
+  connected: false,
+  bot_id: '',
+  bot_name: '',
+  connected_at: '',
+  updated_at: '',
+})
+
+async function fetchWecomBotStatus() {
+  try {
+    const res = await client.get('/configs/wecom-bot-status')
+    const data = res.data.data || {}
+    Object.assign(wecomBotStatus, data)
+  } catch {}
+}
 })
 
 async function saveWecomConfig() {
@@ -166,6 +202,7 @@ onMounted(async () => {
     const res = await client.get('/configs')
     configs.value = res.data.data || []
     fillWecomForm()
+    await fetchWecomBotStatus()
   } catch {}
 })
 </script>

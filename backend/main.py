@@ -7,6 +7,7 @@ from loguru import logger
 import secrets
 import sys
 
+from core.trigger_scheduler import init_scheduler, shutdown_scheduler
 from models.sys_config import SysConfig
 from models.user import User
 import bcrypt as _bcrypt
@@ -50,9 +51,11 @@ async def lifespan(app: FastAPI):
     await Tortoise.init(config=TORTOISE_ORM)
     await Tortoise.generate_schemas(safe=True)
     await seed_defaults()
-    logger.info("Database ready")
+    await init_scheduler()
+    logger.info("Trigger scheduler ready")
     yield
     logger.info("Shutting down...")
+    await shutdown_scheduler()
     await Tortoise.close_connections()
 
 

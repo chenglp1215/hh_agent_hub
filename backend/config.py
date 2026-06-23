@@ -53,6 +53,7 @@ MODELS = [
     "models.claude_settings",
     "models.chat_log",
     "models.workflow_trace",
+    "models.trigger",
 ]
 
 if settings.USE_SQLITE:

@@ -59,6 +59,14 @@
         <a-menu-item key="/apps">应用列表</a-menu-item>
       </a-sub-menu>
 
+      <a-sub-menu key="triggers" class="menu-sub">
+        <template #icon>
+          <span class="menu-icon"><FieldTimeOutlined /></span>
+        </template>
+        <template #title>触发器管理</template>
+        <a-menu-item key="/triggers">触发器列表</a-menu-item>
+      </a-sub-menu>
+
       <a-sub-menu key="resources" class="menu-sub">
         <template #icon>
           <span class="menu-icon"><DatabaseOutlined /></span>
@@ -106,7 +114,7 @@ import { useUserStore } from '@/stores/user'
 import {
   DashboardOutlined, RobotOutlined, ApartmentOutlined,
   AppstoreOutlined, DatabaseOutlined, LineChartOutlined, SettingOutlined,
-  MenuFoldOutlined, MenuUnfoldOutlined,
+  MenuFoldOutlined, MenuUnfoldOutlined, FieldTimeOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
@@ -114,7 +122,7 @@ const route = useRoute()
 const userStore = useUserStore()
 const collapsed = ref(false)
 const selectedKeys = ref<string[]>([route.path])
-const openKeys = ref<string[]>(['agents', 'workflows', 'apps', 'resources', 'monitor', 'settings'])
+const openKeys = ref<string[]>(['agents', 'workflows', 'apps', 'triggers', 'resources', 'monitor', 'settings'])
 
 watch(() => route.path, (path) => {
   selectedKeys.value = [path]

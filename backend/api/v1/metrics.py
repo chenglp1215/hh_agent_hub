@@ -64,22 +64,18 @@ async def get_dashboard_stats(user=Depends(get_current_user)):
     kb_count = await KnowledgeBase.all().count()
     skill_count = await SkillRegistry.all().count()
 
-    # MCP server counts (使用 last_checked_at 是否在 5 分钟内判断在线)
+    # MCP server counts — 简单用 status 判断在线
     mcp_total = await McpServerRegistry.all().count()
+    mcp_online = await McpServerRegistry.filter(status="active").count()
+
+    # Today's executions (北京时间零点)
     from datetime import datetime, timedelta, timezone
     beijing_tz = timezone(timedelta(hours=8))
     now = datetime.now(beijing_tz).replace(tzinfo=None)
-    five_min_ago = now - timedelta(minutes=5)
-    mcp_online = await McpServerRegistry.filter(
-        status="active", last_checked_at__gte=five_min_ago
-    ).count()
-
-    # Today's executions and token usage (北京时间零点)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_executions = await ChatLog.filter(created_at__gte=today_start).count()
 
     # 今日 token 消耗（总计 + 按模型分组）
-    from tortoise.functions import Sum
     today_logs = await ChatLog.filter(
         created_at__gte=today_start, total_tokens__gt=0
     ).all()
@@ -108,13 +104,13 @@ async def get_dashboard_stats(user=Depends(get_current_user)):
         tq = get_task_queue()
         await tq.connect()
         queue_depth = await tq._redis.llen("workflow:queue")
-        # 统计活跃任务（有 result key 的是正在执行的）
-        result_keys = await tq._redis.keys("workflow:result:*")
-        active_tasks = len(result_keys)
+        # 活跃任务数 — 使用专用 key 追踪
+        active_val = await tq._redis.get("workflow:active_count")
+        active_tasks = int(active_val) if active_val else 0
     except Exception:
         pass
 
-    # Worker 状态（检查 worker heartbeat）
+    # Worker 状态
     worker_count = 0
     try:
         from core.task_queue import get_task_queue

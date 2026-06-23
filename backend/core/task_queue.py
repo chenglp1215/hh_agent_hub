@@ -63,6 +63,7 @@ class TaskQueue:
             "created_at": datetime.now().isoformat(),
         }
         await self._redis.lpush(self.QUEUE_KEY, json.dumps(task, ensure_ascii=False))
+        await self._redis.incr("workflow:active_count")
         logger.info(f"Enqueued task {task_id} for session {session_id} (stream={stream})")
         return task_id
 
@@ -156,6 +157,7 @@ class TaskQueue:
         result_key = f"{self.RESULT_PREFIX}{task_id}"
         await self._redis.set(result_key, json.dumps(result, ensure_ascii=False), ex=3600)
         await self._redis.publish(result_key, "done")
+        await self._redis.decr("workflow:active_count")
         logger.info(f"Published result for task {task_id}")
 
 

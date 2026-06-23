@@ -343,7 +343,7 @@ const nodeTypes = {
 } as any as NodeTypesObject
 
 const defaultEdgeOptions = {
-  type: 'smoothstep',
+  type: 'straight',
   animated: true,
   style: { stroke: '#00d4ff33', strokeWidth: 2 },
 }
@@ -415,7 +415,7 @@ function syncCanvas() {
 }
 
 function edgeOpts(color: string) {
-  return { type: 'smoothstep', animated: true, style: { stroke: color, strokeWidth: 2 } }
+  return { type: 'straight', animated: true, style: { stroke: color, strokeWidth: 2 } }
 }
 
 function fitView() { (vueFlowRef.value as any)?.fitView?.({ padding: 0.2 }) }

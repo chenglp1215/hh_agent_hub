@@ -241,76 +241,47 @@ class WecomBotBridge:
         thinking_stream_id = str(uuid.uuid4())
         await ws_client.reply_stream(frame, thinking_stream_id, "正在思考...", finish=True)
 
-        # 订阅流式事件并回复
-        final_answer = ""
-        deadline = asyncio.get_event_loop().time() + 300  # 5 分钟超时
-        done = False
+        # 等待工作流结果（使用 get_result，先查 Redis key 再等 pub/sub 通知）
         try:
-            async for event in task_queue.subscribe_events(task_id):
-                event_type = event.get("type")
-                logger.debug(f"Received event: type={event_type}")
+            result = await task_queue.get_result(task_id, timeout=300)
 
-                if event_type == "token":
-                    token = event.get("content", "")
-                    final_answer += token
-                    await ws_client.reply_stream(frame, stream_id, final_answer, finish=False)
+            if result:
+                final_answer = result.get("final_answer", "")
+                error = result.get("error")
 
-                elif event_type == "text":
-                    final_answer = event.get("content", "")
-                    logger.info(f"Received text event, len={len(final_answer)}")
-
-                elif event_type == "done":
-                    done = True
-                    content = final_answer or event.get("content", "")
-                    break
-
-                elif event_type in ("error", "_abort"):
-                    error_msg = event.get("message", "Workflow execution failed")
-                    await ws_client.reply_stream(frame, stream_id, f"Error: {error_msg}", finish=True)
+                if error:
+                    await ws_client.reply_stream(frame, stream_id, f"Error: {error}", finish=True)
                     execution.status = "failed"
-                    execution.error_message = error_msg
+                    execution.error_message = error
                     execution.completed_at = _now_naive()
                     await execution.save(update_fields=["status", "error_message", "completed_at"])
-                    logger.error(f"Workflow failed for trigger {trigger_id}: {error_msg}")
-                    return
-
-                elif event_type in ("thinking", "agent_call", "agent_result"):
-                    pass  # 忽略中间事件
-
-                # 检查超时
-                if asyncio.get_event_loop().time() > deadline:
-                    logger.warning(f"Workflow timeout waiting for events, trigger={trigger_id}")
-                    break
-
-            # 如果没有收到事件，尝试从 result 读取（兜底）
-            if not final_answer and not done:
-                logger.info(f"No events received, trying result fallback for task {task_id}")
-                result = await task_queue.wait_result(task_id, timeout=5)
-                if result:
-                    final_answer = result.get("final_answer", "")
-                    done = True
-                    logger.info(f"Got result from fallback, len={len(final_answer)}")
-
-            # 回复最终结果
-            if final_answer:
-                await ws_client.reply_stream(frame, stream_id, final_answer, finish=True)
-                execution.status = "success"
-                execution.completed_at = _now_naive()
-                started = execution.started_at
-                if started.tzinfo is not None:
-                    started = started.astimezone(BEIJING_TZ).replace(tzinfo=None)
-                execution.duration_ms = int(
-                    (execution.completed_at - started).total_seconds() * 1000
-                )
-                await execution.save(update_fields=["status", "completed_at", "duration_ms"])
-                logger.info(f"Workflow completed for trigger {trigger_id}, task {task_id}")
+                    logger.error(f"Workflow failed for trigger {trigger_id}: {error}")
+                elif final_answer:
+                    await ws_client.reply_stream(frame, stream_id, final_answer, finish=True)
+                    execution.status = "success"
+                    execution.completed_at = _now_naive()
+                    started = execution.started_at
+                    if started.tzinfo is not None:
+                        started = started.astimezone(BEIJING_TZ).replace(tzinfo=None)
+                    execution.duration_ms = int(
+                        (execution.completed_at - started).total_seconds() * 1000
+                    )
+                    await execution.save(update_fields=["status", "completed_at", "duration_ms"])
+                    logger.info(f"Workflow completed for trigger {trigger_id}, task {task_id}, answer_len={len(final_answer)}")
+                else:
+                    await ws_client.reply_stream(frame, stream_id, "Error: 工作流未返回结果", finish=True)
+                    execution.status = "failed"
+                    execution.error_message = "Empty result"
+                    execution.completed_at = _now_naive()
+                    await execution.save(update_fields=["status", "error_message", "completed_at"])
+                    logger.error(f"Workflow empty result for trigger {trigger_id}")
             else:
-                await ws_client.reply_stream(frame, stream_id, "Error: 未获取到工作流回复", finish=True)
+                await ws_client.reply_stream(frame, stream_id, "Error: 工作流执行超时 (5 min)", finish=True)
                 execution.status = "failed"
-                execution.error_message = "No response"
+                execution.error_message = "Timeout"
                 execution.completed_at = _now_naive()
                 await execution.save(update_fields=["status", "error_message", "completed_at"])
-                logger.error(f"Workflow no response for trigger {trigger_id}")
+                logger.error(f"Workflow timeout for trigger {trigger_id}")
 
         except Exception as e:
             await ws_client.reply_stream(frame, stream_id, f"Error: {str(e)}", finish=True)

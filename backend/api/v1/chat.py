@@ -1,7 +1,7 @@
 import uuid
 import asyncio
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import StreamingResponse
 from models.app import App
 from models.session import Session
@@ -10,6 +10,7 @@ from utils.response import success, error
 from utils.sse import sse_event
 from core.session_manager import session_manager
 from core.task_queue import get_task_queue
+from api.deps import get_current_user
 from loguru import logger
 
 router = APIRouter(prefix="/chat", tags=["对话"])
@@ -97,8 +98,10 @@ async def _stream_response(task_id: str):
         yield await sse_event("error", {"message": str(e)})
 
 
+from api.deps import get_current_user
+
 @router.get("/sessions/{session_id}")
-async def get_session(session_id: str, request: Request):
+async def get_session(session_id: str, request: Request, user=Depends(get_current_user)):
     """获取会话历史消息"""
     session = await Session.get_or_none(id=session_id)
     if not session:
@@ -113,7 +116,7 @@ async def get_session(session_id: str, request: Request):
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_session(session_id: str, request: Request):
+async def delete_session(session_id: str, request: Request, user=Depends(get_current_user)):
     """清除会话及其 workspace"""
     session = await Session.get_or_none(id=session_id)
     if not session:

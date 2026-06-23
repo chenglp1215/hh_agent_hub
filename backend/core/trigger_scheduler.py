@@ -159,10 +159,7 @@ async def _trigger_execute(trigger_id: int):
     trigger.next_fire_at = _get_job_next_run_time(trigger_id)
     await trigger.save()
 
-    # fire-and-forget 发送通知
-    from core.trigger_notifier import send_trigger_notification
-    import asyncio
-    asyncio.create_task(send_trigger_notification(trigger, execution))
+    # 通知在 workflow_executor 任务完成后发送（不在这里发，避免任务未完成就通知）
 
     logger.info(f"Trigger {trigger_id} executed, task_id={task_id}, session_id={session_id}")
 

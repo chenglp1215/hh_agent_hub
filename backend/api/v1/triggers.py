@@ -265,10 +265,7 @@ async def execute_trigger(trigger_id: int, user=Depends(get_current_user)):
     t.last_fired_at = datetime.now()
     await t.save(update_fields=["last_fired_at"])
 
-    # fire-and-forget 发送通知
-    from core.trigger_notifier import send_trigger_notification
-    import asyncio
-    asyncio.create_task(send_trigger_notification(t, execution))
+    # 通知在 workflow_executor 任务完成后发送（不在这里发，避免任务未完成就通知）
 
     logger.info(f"Manual trigger {trigger_id} executed, task_id={task_id}")
 

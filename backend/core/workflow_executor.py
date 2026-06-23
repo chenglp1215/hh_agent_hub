@@ -9,6 +9,7 @@
   6. 结果回写 DB + 通过 task_queue 发布
 """
 
+import os
 import time as time_mod
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -287,6 +288,42 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
 
             logger.info(f"Task {task_id} completed in {duration_ms}ms")
 
+            # 写入 WorkflowTrace 记录（主控台 + 执行追踪页面数据来源）
+            try:
+                from models.workflow_trace import WorkflowTrace
+                await WorkflowTrace.create(
+                    execution_id=task_id,
+                    workflow_id=workflow.id if workflow else None,
+                    app_id=app_id,
+                    status="success",
+                    agent_count=len(agent_names),
+                    total_duration_ms=duration_ms,
+                    trace_file_path=os.path.join(
+                        session.workspace_path or "", "trace.json"
+                    ) if session.workspace_path else "",
+                    started_at=datetime.fromtimestamp(start),
+                    completed_at=datetime.now(),
+                )
+            except Exception as wt_err:
+                logger.warning(f"Failed to create WorkflowTrace: {wt_err}")
+
+            # 如果是触发器触发的任务，发送通知
+            try:
+                if session_id.startswith("trigger_"):
+                    from models.trigger import Trigger, TriggerExecution
+                    import re
+                    m = re.match(r"trigger_(?:manual_)?(\d+)_", session_id)
+                    if m:
+                        trigger_id = int(m.group(1))
+                        trigger = await Trigger.get_or_none(id=trigger_id).select_related("notification")
+                        te = await TriggerExecution.filter(task_id=task_id).first()
+                        if trigger and te:
+                            from core.trigger_notifier import send_trigger_notification
+                            import asyncio
+                            asyncio.create_task(send_trigger_notification(trigger, te))
+            except Exception as notify_err:
+                logger.warning(f"Failed to send trigger notification: {notify_err}")
+
     except Exception as e:
         logger.error(f"Task {task_id} failed: {e}")
         await task_queue.publish_result(task_id, {
@@ -316,6 +353,40 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
                     await te.save(update_fields=["status", "error_message", "duration_ms", "completed_at"])
             except Exception as te_err:
                 logger.warning(f"Failed to update TriggerExecution: {te_err}")
+
+            # 写入 WorkflowTrace 记录（失败）
+            try:
+                from models.workflow_trace import WorkflowTrace
+                await WorkflowTrace.create(
+                    execution_id=task_id,
+                    app_id=app_id,
+                    status="failed",
+                    agent_count=len(agent_names),
+                    total_duration_ms=int((time_mod.time() - start) * 1000),
+                    error_summary=str(e)[:500],
+                    started_at=datetime.fromtimestamp(start),
+                    completed_at=datetime.now(),
+                )
+            except Exception as wt_err:
+                logger.warning(f"Failed to create WorkflowTrace: {wt_err}")
+
+            # 如果是触发器触发的任务，发送失败通知
+            try:
+                if session_id.startswith("trigger_"):
+                    from models.trigger import Trigger, TriggerExecution
+                    import re
+                    m = re.match(r"trigger_(?:manual_)?(\d+)_", session_id)
+                    if m:
+                        trigger_id = int(m.group(1))
+                        trigger = await Trigger.get_or_none(id=trigger_id).select_related("notification")
+                        te = await TriggerExecution.filter(task_id=task_id).first()
+                        if trigger and te:
+                            from core.trigger_notifier import send_trigger_notification
+                            import asyncio
+                            asyncio.create_task(send_trigger_notification(trigger, te))
+            except Exception as notify_err:
+                logger.warning(f"Failed to send trigger notification: {notify_err}")
+
         except Exception as log_err:
             logger.warning(f"Failed to save ChatLog: {log_err}")
 

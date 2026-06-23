@@ -48,6 +48,8 @@ class TokenCountCallback(BaseCallbackHandler):
     def on_llm_start(self, serialized, prompts, **kwargs):
         """捕获输入 prompt 文本用于 token 估算"""
         self._prompt_texts = prompts or []
+        from loguru import logger
+        logger.debug(f"[TokenCallback] on_llm_start called, prompts={len(self._prompt_texts)}")
 
     def on_llm_end(self, response, **kwargs):
         """LLM 调用完成时提取 token 使用量"""
@@ -55,7 +57,11 @@ class TokenCountCallback(BaseCallbackHandler):
         if not task_id:
             return
 
+        from loguru import logger
         try:
+            # Debug: 确认回调被调用
+            logger.debug(f"[TokenCallback] on_llm_end called, task_id={task_id}")
+
             model_name = None
             prompt_tokens = 0
             completion_tokens = 0
@@ -64,6 +70,11 @@ class TokenCountCallback(BaseCallbackHandler):
 
             # 从 generations 中提取
             generations = response.generations if response.generations else []
+            logger.debug(f"[TokenCallback] generations count={len(generations)}")
+
+            # Debug: 打印 response.llm_output
+            llm_output_raw = response.llm_output
+            logger.debug(f"[TokenCallback] llm_output={llm_output_raw}")
             for gen_list in generations:
                 for gen in gen_list:
                     msg = getattr(gen, 'message', None)

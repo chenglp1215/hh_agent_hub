@@ -149,7 +149,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import {
   RobotOutlined, ApartmentOutlined, ThunderboltOutlined,
   PlusOutlined, ApiOutlined, MessageOutlined,
@@ -251,8 +251,9 @@ function statusLabel(s: string) {
   return { success: '成功', failed: '失败', error: '失败' }[s] || s
 }
 
-onMounted(async () => {
-  loading.value = true
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+
+async function fetchStats() {
   try {
     const res = await dashboardApi.getStats()
     const d = res.data.data
@@ -273,10 +274,20 @@ onMounted(async () => {
     }
     recentLogs.value = d.recent_logs || []
   } catch {
-    // silent fail, keep zeros
-  } finally {
-    loading.value = false
+    // silent fail
   }
+}
+
+onMounted(async () => {
+  loading.value = true
+  await fetchStats()
+  loading.value = false
+  // 每 30 秒自动刷新
+  refreshTimer = setInterval(fetchStats, 30000)
+})
+
+onUnmounted(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
 })
 </script>
 

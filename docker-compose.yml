@@ -67,6 +67,7 @@ services:
       - DB_NAME=${DB_NAME:-agent_platform}
       - REDIS_URL=redis://redis:6379/0
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WORKSPACE_HOST_PATH=/opt/hh_agent_hub/workspaces
     volumes:
       - /opt/hh_agent_hub/workspaces:/data/workflow_workspaces
       - /var/run/docker.sock:/var/run/docker.sock

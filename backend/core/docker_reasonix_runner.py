@@ -19,6 +19,14 @@ class DockerReasonixRunner:
 
     IMAGE = os.environ.get("REASONIX_IMAGE", "hh-reasonix:latest")
     NETWORK = os.environ.get("DOCKER_NETWORK", "hh_agent_hub_agent-net")
+    WORKSPACE_BASE = os.environ.get("WORKSPACE_BASE", "/data/workflow_workspaces")
+    WORKSPACE_HOST_PATH = os.environ.get("WORKSPACE_HOST_PATH", "")
+
+    def _to_host_path(self, container_path: str) -> str:
+        """Convert worker container path to host path for Docker volume mounts."""
+        if self.WORKSPACE_HOST_PATH and container_path.startswith(self.WORKSPACE_BASE):
+            return container_path.replace(self.WORKSPACE_BASE, self.WORKSPACE_HOST_PATH, 1)
+        return container_path
 
     def __init__(self, config: Dict[str, Any] = None,
                  mcp_servers: List[Dict] = None,
@@ -147,7 +155,7 @@ class DockerReasonixRunner:
             "docker", "run", "--rm", "-i",
             "--network", self.NETWORK,
             "--user", "1001:1001",
-            "-v", f"{workspace_dir}:/workspace",
+            "-v", f"{host_workspace}:/workspace",
             "-v", f"{config_path}:/home/reasonixuser/.reasonix/config.json:ro",
             "-w", "/workspace",
             "--memory", "512m",
@@ -156,8 +164,10 @@ class DockerReasonixRunner:
             "sh", "-c", inner_cmd,
         ]
 
+        host_workspace = self._to_host_path(workspace_dir)
+
         logger.info(f"Docker Reasonix: image={self.IMAGE}, model={model}, "
-                    f"cwd={workspace_dir}, timeout={timeout_seconds}s")
+                    f"cwd={host_workspace}, timeout={timeout_seconds}s")
 
         try:
             # Use shell pipe: echo "input" | docker run -i ...

@@ -18,6 +18,14 @@ class DockerClaudeCodeRunner:
 
     IMAGE = os.environ.get("CLAUDECODE_IMAGE", "hh-claudecode:latest")
     NETWORK = os.environ.get("DOCKER_NETWORK", "hh_agent_hub_agent-net")
+    WORKSPACE_BASE = os.environ.get("WORKSPACE_BASE", "/data/workflow_workspaces")
+    WORKSPACE_HOST_PATH = os.environ.get("WORKSPACE_HOST_PATH", "")
+
+    def _to_host_path(self, container_path: str) -> str:
+        """Convert worker container path to host path for Docker volume mounts."""
+        if self.WORKSPACE_HOST_PATH and container_path.startswith(self.WORKSPACE_BASE):
+            return container_path.replace(self.WORKSPACE_BASE, self.WORKSPACE_HOST_PATH, 1)
+        return container_path
 
     def __init__(self, config: Dict[str, Any] = None,
                  mcp_servers: List[Dict] = None,
@@ -196,7 +204,7 @@ class DockerClaudeCodeRunner:
             "docker", "run", "--rm",
             "--network", self.NETWORK,
             "--user", "1001:1001",
-            "-v", f"{workspace_dir}:/workspace",
+            "-v", f"{host_workspace}:/workspace",
             "-w", "/workspace",
             "--memory", "512m",
             "--cpus", "1.0",
@@ -220,8 +228,10 @@ class DockerClaudeCodeRunner:
 
         docker_args.extend([self.IMAGE, "sh", "-c", inner_cmd])
 
+        host_workspace = self._to_host_path(workspace_dir)
+
         logger.info(f"Docker Claude Code: image={self.IMAGE}, model={model}, "
-                    f"max_turns={max_turns}, cwd={workspace_dir}, timeout={timeout_seconds}s")
+                    f"max_turns={max_turns}, cwd={host_workspace}, timeout={timeout_seconds}s")
 
         try:
             # Build docker run command parts
@@ -229,7 +239,7 @@ class DockerClaudeCodeRunner:
                 "docker", "run", "--rm", "-i",
                 "--network", self.NETWORK,
                 "--user", "1001:1001",
-                "-v", f"{workspace_dir}:/workspace",
+                "-v", f"{host_workspace}:/workspace",
                 "-w", "/workspace",
                 "--memory", "512m",
                 "--cpus", "1.0",

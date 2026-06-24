@@ -71,6 +71,8 @@ services:
       - workspace_data:/data/workflow_workspaces
       - /var/run/docker.sock:/var/run/docker.sock
       - ./logs:/logs
+    group_add:
+      - "${DOCKER_GID:-999}"
     depends_on:
       mysql:
         condition: service_healthy

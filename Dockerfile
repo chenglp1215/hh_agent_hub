@@ -17,7 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && npm install -g @anthropic-ai/claude-code
 
 # 创建非 root 用户（Claude Code SDK 要求非 root 才能使用 --dangerously-skip-permissions）
-RUN useradd -m -s /bin/bash appuser
+# 添加 docker 组以便访问 Docker socket
+RUN groupadd -f docker && useradd -m -s /bin/bash -G docker appuser
 
 WORKDIR /app
 

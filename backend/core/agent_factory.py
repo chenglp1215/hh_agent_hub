@@ -537,8 +537,8 @@ class AgentNodeFactory:
         Returns:
             异步函数，接收 state dict 并返回更新后的 state dict
         """
-        from core.claude_code_runner import ClaudeCodeRunner
-        runner = ClaudeCodeRunner(
+        from core.docker_claude_code_runner import DockerClaudeCodeRunner
+        runner = DockerClaudeCodeRunner(
             config=agent_config.get("claudecode_config", {}),
             mcp_servers=mcp_servers,
             kb_content=kb_content,
@@ -565,6 +565,51 @@ class AgentNodeFactory:
 
         return agent_node
 
+    async def create_reasonix_agent(self, agent_config: Dict[str, Any],
+                                     mcp_servers: List[Dict] = None,
+                                     kb_content: List[Dict] = None,
+                                     skill_content: List[Dict] = None):
+        """创建 reasonix 类型 Agent 的执行节点
+
+        将请求委托给 Reasonix CLI 运行器（Docker 容器化执行）。
+
+        Args:
+            agent_config: Agent 配置字典，包含 reasonix_config 等字段
+            mcp_servers: 关联的 MCP Server 配置列表
+            kb_content: 关联知识库的 ContentBlock 列表
+            skill_content: 关联 Skill 的内容列表
+
+        Returns:
+            异步函数，接收 state dict 并返回更新后的 state dict
+        """
+        from core.docker_reasonix_runner import DockerReasonixRunner
+        runner = DockerReasonixRunner(
+            config=agent_config.get("reasonix_config", {}),
+            mcp_servers=mcp_servers,
+            kb_content=kb_content,
+            skill_content=skill_content,
+            agent_name=agent_config.get("name", "unknown"),
+            system_prompt=agent_config.get("system_prompt", ""),
+        )
+        agent_name = agent_config.get("name", "unknown")
+
+        async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
+            user_input = state.get("user_input", "")
+            session_id = state.get("session_id", "")
+            try:
+                output = await runner.invoke(user_input, session_id, state)
+            except Exception as e:
+                output = f"Reasonix Agent error: {str(e)}"
+                logger.error(f"Reasonix Agent {agent_name} failed: {e}")
+
+            intermediate = state.get("intermediate_results", {})
+            intermediate[agent_name] = output
+            return {
+                "intermediate_results": intermediate,
+            }
+
+        return agent_node
+
     async def create(self, agent_config: Dict[str, Any], event_queue=None):
         agent_type = agent_config.get("agent_type", "local")
 
@@ -576,6 +621,13 @@ class AgentNodeFactory:
             return await self.create_a2a_agent(agent_config)
         elif agent_type == "claudecode":
             return await self.create_claudecode_agent(
+                agent_config,
+                mcp_servers=agent_config.get("mcp_servers", []),
+                kb_content=agent_config.get("kb_content", []),
+                skill_content=agent_config.get("skills", []),
+            )
+        elif agent_type == "reasonix":
+            return await self.create_reasonix_agent(
                 agent_config,
                 mcp_servers=agent_config.get("mcp_servers", []),
                 kb_content=agent_config.get("kb_content", []),

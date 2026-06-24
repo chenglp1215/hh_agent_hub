@@ -15,6 +15,7 @@
         <a-select-option value="http">HTTP Agent</a-select-option>
         <a-select-option value="a2a">A2A Agent</a-select-option>
         <a-select-option value="claudecode">Claude Code</a-select-option>
+        <a-select-option value="reasonix">Reasonix (DeepSeek)</a-select-option>
       </a-select>
       <a-select v-model:value="status" class="w-32" placeholder="状态" @change="fetchList">
         <a-select-option value="">全部状态</a-select-option>
@@ -97,11 +98,11 @@ const filteredAgents = computed(() => {
 })
 
 function typeColor(t: string) {
-  return { local: 'blue', http: 'orange', a2a: 'cyan', claudecode: 'purple' }[t] || 'default'
+  return { local: 'blue', http: 'orange', a2a: 'cyan', claudecode: 'purple', reasonix: 'geekblue' }[t] || 'default'
 }
 
 function typeLabel(t: string) {
-  return { local: '本地', http: 'HTTP', a2a: 'A2A', claudecode: 'Claude Code' }[t] || t
+  return { local: '本地', http: 'HTTP', a2a: 'A2A', claudecode: 'Claude Code', reasonix: 'Reasonix' }[t] || t
 }
 
 async function fetchList() {

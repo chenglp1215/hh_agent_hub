@@ -1,0 +1,17 @@
+# ============================================
+# Reasonix 轻量执行镜像 (DeepSeek 编程 Agent)
+# 用于 docker run --rm 临时容器执行 reasonix agent
+# ============================================
+FROM node:22-alpine
+
+LABEL app="hh-reasonix"
+LABEL description="Lightweight Reasonix execution container for DeepSeek"
+
+RUN apk add --no-cache git bash \
+    && npm install -g reasonix
+
+# 非 root 用户，与 worker 的 appuser UID 一致
+RUN adduser -D -u 1000 reasonixuser
+
+USER reasonixuser
+WORKDIR /workspace

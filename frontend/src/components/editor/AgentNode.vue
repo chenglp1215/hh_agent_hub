@@ -25,7 +25,7 @@ defineProps<{
 }>()
 
 function typeColor(t: string) {
-  return { local: 'blue', http: 'orange', a2a: 'cyan', claudecode: 'purple' }[t] || 'default'
+  return { local: 'blue', http: 'orange', a2a: 'cyan', claudecode: 'purple', reasonix: 'geekblue' }[t] || 'default'
 }
 </script>
 

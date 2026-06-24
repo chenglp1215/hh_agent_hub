@@ -15,3 +15,15 @@ export interface A2AConfig {
   /** 请求超时时间（秒），默认 30 */
   timeout: number
 }
+
+/** Reasonix (DeepSeek) Agent 配置 */
+export interface ReasonixConfig {
+  /** 关联项目 ID */
+  project_registry_id?: number
+  /** DeepSeek API Key */
+  deepseek_api_key: string
+  /** DeepSeek 模型名称 */
+  deepseek_model: string
+  /** 最大轮次 */
+  max_turns?: number
+}

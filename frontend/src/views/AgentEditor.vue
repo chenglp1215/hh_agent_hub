@@ -27,6 +27,7 @@
                 <a-select-option value="http">HTTP Agent</a-select-option>
                 <a-select-option value="a2a">A2A Agent</a-select-option>
                 <a-select-option value="claudecode">Claude Code</a-select-option>
+                <a-select-option value="reasonix">Reasonix (DeepSeek)</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
@@ -177,6 +178,36 @@
           </a-form-item>
         </template>
 
+        <!-- Reasonix Config -->
+        <template v-if="form.agent_type === 'reasonix'">
+          <h3 class="text-lg font-semibold mb-4 mt-4 text-[#00d4ff]">Reasonix 配置 (DeepSeek)</h3>
+
+          <a-form-item label="关联项目">
+            <a-select
+              v-model:value="rxConfig.project_registry_id"
+              placeholder="选择项目..."
+              :options="projectOptions"
+              show-search
+              filter-option
+              allow-clear
+              :loading="loadingProjects"
+            />
+          </a-form-item>
+          <a-form-item label="DeepSeek API Key" required>
+            <a-input-password v-model:value="rxConfig.deepseek_api_key" placeholder="sk-..." />
+          </a-form-item>
+          <a-form-item label="模型">
+            <a-select v-model:value="rxConfig.deepseek_model">
+              <a-select-option value="deepseek-chat">deepseek-chat</a-select-option>
+              <a-select-option value="deepseek-coder">deepseek-coder</a-select-option>
+              <a-select-option value="deepseek-reasoner">deepseek-reasoner</a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="最大轮次">
+            <a-input-number v-model:value="rxConfig.max_turns" :min="1" :max="100" class="w-full" />
+          </a-form-item>
+        </template>
+
         <!-- System Prompt -->
         <h3 class="text-lg font-semibold mb-4 mt-4 text-[#00d4ff]">System Prompt</h3>
         <a-form-item>
@@ -263,6 +294,12 @@ const ccConfig = ref<any>({
   project_registry_id: undefined,
   settings_registry_id: undefined,
 })
+const rxConfig = ref<any>({
+  project_registry_id: undefined,
+  deepseek_api_key: '',
+  deepseek_model: 'deepseek-chat',
+  max_turns: 25,
+})
 
 const loadingProjects = ref(false)
 const projectOptions = ref<{ value: number; label: string }[]>([])
@@ -339,6 +376,14 @@ async function loadAgent() {
         ccConfig.value.settings_registry_id = undefined
       }
     }
+    if (d.reasonix_config) {
+      rxConfig.value = {
+        project_registry_id: d.reasonix_config.project_registry_id || undefined,
+        deepseek_api_key: d.reasonix_config.deepseek_api_key || '',
+        deepseek_model: d.reasonix_config.deepseek_model || 'deepseek-chat',
+        max_turns: d.reasonix_config.max_turns || 25,
+      }
+    }
     selectedMcpServers.value = (d.mcp_links || []).map((l: any) => ({
       mcp_server_id: l.mcp_server?.id || l.mcp_server_id,
       enabled_tools: l.enabled_tools || [],
@@ -383,6 +428,17 @@ function buildFormData() {
     data.claudecode_config = {
       project_registry_id: ccConfig.value.project_registry_id || undefined,
       settings_registry_id: ccConfig.value.settings_registry_id || undefined,
+    }
+  }
+  if (form.value.agent_type === 'reasonix') {
+    if (!rxConfig.value.deepseek_api_key?.trim()) {
+      throw new Error('请输入 DeepSeek API Key')
+    }
+    data.reasonix_config = {
+      project_registry_id: rxConfig.value.project_registry_id || undefined,
+      deepseek_api_key: rxConfig.value.deepseek_api_key,
+      deepseek_model: rxConfig.value.deepseek_model || 'deepseek-chat',
+      max_turns: rxConfig.value.max_turns || 25,
     }
   }
   data.mcp_links = selectedMcpServers.value.map((item: any) => ({

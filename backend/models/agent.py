@@ -13,6 +13,7 @@ class Agent(Model):
     http_config = fields.JSONField(null=True)
     claudecode_config = fields.JSONField(null=True)
     a2a_config = fields.JSONField(null=True)
+    reasonix_config = fields.JSONField(null=True)
     system_prompt = fields.TextField(null=True)
     mcp_servers = fields.JSONField(default=list)
     skills = fields.JSONField(default=list)

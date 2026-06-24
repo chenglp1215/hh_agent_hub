@@ -13,6 +13,7 @@ class AgentCreate(BaseModel):
     http_config: Optional[Dict[str, Any]] = None
     claudecode_config: Optional[Dict[str, Any]] = None
     a2a_config: Optional[Dict[str, Any]] = None
+    reasonix_config: Optional[Dict[str, Any]] = None
     system_prompt: Optional[str] = None
     mcp_links: List[Dict[str, Any]] = []
     kb_ids: List[int] = []
@@ -29,6 +30,7 @@ class AgentUpdate(BaseModel):
     http_config: Optional[Dict[str, Any]] = None
     claudecode_config: Optional[Dict[str, Any]] = None
     a2a_config: Optional[Dict[str, Any]] = None
+    reasonix_config: Optional[Dict[str, Any]] = None
     system_prompt: Optional[str] = None
     mcp_links: Optional[List[Dict[str, Any]]] = None
     kb_ids: Optional[List[int]] = None

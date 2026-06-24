@@ -69,6 +69,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - workspace_data:/data/workflow_workspaces
+      - /var/run/docker.sock:/var/run/docker.sock
       - ./logs:/logs
     depends_on:
       mysql:

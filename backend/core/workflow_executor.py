@@ -69,7 +69,7 @@ async def build_workflow(session: Session, message: str) -> tuple:
             "name": agent.name, "agent_type": agent.agent_type, "role": agent.role,
             "llm_config": agent.llm_config, "llm_config_id": agent.llm_config_id,
             "http_config": agent.http_config, "claudecode_config": agent.claudecode_config,
-            "a2a_config": agent.a2a_config,
+            "a2a_config": agent.a2a_config, "reasonix_config": agent.reasonix_config,
             "system_prompt": agent.system_prompt,
             "knowledge_base_ids": agent.knowledge_base_ids or [],
             "mcp_servers": [{

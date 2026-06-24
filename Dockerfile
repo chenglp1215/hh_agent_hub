@@ -1,10 +1,16 @@
 # ============================================
 # 多Agent协同平台 - 后端镜像 (main + worker 共用)
 # ============================================
+# 从 docker 镜像复制 CLI 二进制（避免访问 Docker 官方源）
+FROM docker:27 AS docker-cli
+
 FROM python:3.11-slim
 
 LABEL app="hh-agent-hub"
 LABEL description="Multi-Agent Collaboration Platform Backend"
+
+# 从 docker 镜像复制 CLI
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 
 # 系统依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -13,10 +19,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     nodejs \
     npm \
-    curl \
-    && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
-    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian bookworm stable" > /etc/apt/sources.list.d/docker.list \
-    && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g @anthropic-ai/claude-code
 

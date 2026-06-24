@@ -1,3 +1,4 @@
+import uuid
 import httpx
 from typing import Dict, Any
 from loguru import logger
@@ -75,6 +76,7 @@ class A2AAgentClient:
                 output_parts: list[str] = []
                 request = a2a_pb2.SendMessageRequest(
                     message=a2a_pb2.Message(
+                        message_id=str(uuid.uuid4()),
                         role=a2a_pb2.Role.ROLE_USER,
                         parts=[a2a_pb2.Part(text=user_input)],
                     ),

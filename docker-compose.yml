@@ -39,7 +39,7 @@ services:
       - FERNET_KEY=${FERNET_KEY:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - workspace_data:/data/workflow_workspaces
+      - /opt/hh_agent_hub/workspaces:/data/workflow_workspaces
       - ./logs:/logs
     depends_on:
       mysql:
@@ -68,7 +68,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - workspace_data:/data/workflow_workspaces
+      - /opt/hh_agent_hub/workspaces:/data/workflow_workspaces
       - /var/run/docker.sock:/var/run/docker.sock
       - ./logs:/logs
     group_add:

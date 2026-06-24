@@ -185,38 +185,37 @@ class DockerClaudeCodeRunner:
                           env_vars: Dict[str, str] = None) -> str:
         """Execute claude CLI inside a disposable Docker container via Docker SDK."""
 
-        # Write user_input to a temp file, mount into container
-        fd, input_path = tempfile.mkstemp(suffix=".txt", prefix="claude_input_")
+        # Write user_input inside workspace (already mounted in container)
+        input_path = os.path.join(workspace_dir, ".user_input.txt")
+        with open(input_path, "w", encoding="utf-8") as f:
+            f.write(user_input)
+
+        # Build the claude command
+        claude_cmd = (
+            f'claude --print --output-format json'
+            f' --model {model}'
+            f' --max-turns {max_turns}'
+            f' --permission-mode {permission_mode}'
+            f' --dangerously-skip-permissions'
+            f' -p "$(cat /workspace/.user_input.txt)"'
+        )
+
+        env_list = []
+        if env_vars:
+            env_list = [f"{k}={v}" for k, v in env_vars.items()]
+
+        logger.info(f"Docker Claude Code: image={self.IMAGE}, model={model}, "
+                    f"max_turns={max_turns}, cwd={workspace_dir}, timeout={timeout_seconds}s")
+
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(user_input)
-
-            # Build the claude command
-            claude_cmd = (
-                f'claude --print --output-format json'
-                f' --model {model}'
-                f' --max-turns {max_turns}'
-                f' --permission-mode {permission_mode}'
-                f' --dangerously-skip-permissions'
-                f' -p "$(cat /tmp/user_input.txt)"'
-            )
-
-            env_list = []
-            if env_vars:
-                env_list = [f"{k}={v}" for k, v in env_vars.items()]
-
-            logger.info(f"Docker Claude Code: image={self.IMAGE}, model={model}, "
-                        f"max_turns={max_turns}, cwd={workspace_dir}, timeout={timeout_seconds}s")
-
             result_text = await asyncio.wait_for(
                 asyncio.to_thread(
                     self._docker_run,
-                    workspace_dir, input_path, claude_cmd, env_list, timeout_seconds,
+                    workspace_dir, claude_cmd, env_list, timeout_seconds,
                 ),
                 timeout=timeout_seconds + 30,
             )
             return result_text
-
         except asyncio.TimeoutError:
             logger.error(f"Docker Claude Code timed out after {timeout_seconds}s")
             return f"Error: Claude Code execution timed out after {timeout_seconds} seconds"
@@ -229,7 +228,7 @@ class DockerClaudeCodeRunner:
             except OSError:
                 pass
 
-    def _docker_run(self, workspace_dir: str, input_path: str,
+    def _docker_run(self, workspace_dir: str,
                     claude_cmd: str, env_list: list, timeout_seconds: int) -> str:
         """Synchronous Docker SDK call — runs in thread pool."""
         client = docker.from_env()
@@ -241,7 +240,6 @@ class DockerClaudeCodeRunner:
                 network=self.NETWORK,
                 volumes={
                     workspace_dir: {"bind": "/workspace", "mode": "rw"},
-                    input_path: {"bind": "/tmp/user_input.txt", "mode": "ro"},
                 },
                 working_dir="/workspace",
                 environment=env_list or None,

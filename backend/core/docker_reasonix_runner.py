@@ -128,7 +128,7 @@ class DockerReasonixRunner:
                           timeout_seconds: int) -> str:
         """Execute reasonix CLI inside a disposable Docker container via Docker SDK."""
 
-        # Write reasonix config (API key)
+        # Write reasonix config (API key) to temp dir
         config_dir = tempfile.mkdtemp(prefix="reasonix_cfg_")
         config_path = os.path.join(config_dir, "config.json")
         with open(config_path, "w", encoding="utf-8") as f:
@@ -140,26 +140,25 @@ class DockerReasonixRunner:
         with open(toml_path, "w", encoding="utf-8") as f:
             f.write(toml_content)
 
-        # Write user_input to temp file
-        fd, input_path = tempfile.mkstemp(suffix=".txt", prefix="reasonix_input_")
+        # Write user_input inside workspace (already mounted)
+        input_path = os.path.join(workspace_dir, ".user_input.txt")
+        with open(input_path, "w", encoding="utf-8") as f:
+            f.write(user_input)
+
+        reasonix_cmd = 'reasonix run "$(cat /workspace/.user_input.txt)"'
+
+        logger.info(f"Docker Reasonix: image={self.IMAGE}, model={model}, "
+                    f"cwd={workspace_dir}, timeout={timeout_seconds}s")
+
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(user_input)
-
-            reasonix_cmd = 'reasonix run "$(cat /tmp/user_input.txt)"'
-
-            logger.info(f"Docker Reasonix: image={self.IMAGE}, model={model}, "
-                        f"cwd={workspace_dir}, timeout={timeout_seconds}s")
-
             result_text = await asyncio.wait_for(
                 asyncio.to_thread(
                     self._docker_run,
-                    workspace_dir, input_path, config_path, reasonix_cmd, timeout_seconds,
+                    workspace_dir, config_path, reasonix_cmd, timeout_seconds,
                 ),
                 timeout=timeout_seconds + 30,
             )
             return result_text
-
         except asyncio.TimeoutError:
             logger.error(f"Docker Reasonix timed out after {timeout_seconds}s")
             return f"Error: Reasonix execution timed out after {timeout_seconds} seconds"
@@ -171,10 +170,11 @@ class DockerReasonixRunner:
                 os.unlink(input_path)
                 os.unlink(config_path)
                 os.rmdir(config_dir)
+                os.unlink(toml_path)
             except OSError:
                 pass
 
-    def _docker_run(self, workspace_dir: str, input_path: str,
+    def _docker_run(self, workspace_dir: str,
                     config_path: str, reasonix_cmd: str, timeout_seconds: int) -> str:
         """Synchronous Docker SDK call — runs in thread pool."""
         client = docker.from_env()
@@ -186,7 +186,6 @@ class DockerReasonixRunner:
                 network=self.NETWORK,
                 volumes={
                     workspace_dir: {"bind": "/workspace", "mode": "rw"},
-                    input_path: {"bind": "/tmp/user_input.txt", "mode": "ro"},
                     config_path: {"bind": "/home/reasonixuser/.reasonix/config.json", "mode": "ro"},
                 },
                 working_dir="/workspace",

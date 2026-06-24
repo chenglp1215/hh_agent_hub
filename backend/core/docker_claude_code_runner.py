@@ -81,9 +81,9 @@ class DockerClaudeCodeRunner:
         force_pull = self._needs_code_pull(context)
         ensure_code_exists(project, project_code_path, force_pull=force_pull)
 
-        self._write_claude_md(session_workspace, context, project.system_prompt,
-                              project_code_path=project_code_path)
-        self._write_claude_settings(session_workspace, settings)
+        # 写入 CLAUDE.md 和 settings.json 到项目代码目录（Claude Code 的 cwd）
+        self._write_claude_md(project_code_path, context, project.system_prompt)
+        self._write_claude_settings(project_code_path, settings)
 
         model = settings.model or "claude-sonnet-4-6"
         max_turns = settings.max_turns or 25
@@ -105,8 +105,11 @@ class DockerClaudeCodeRunner:
 
         timeout_seconds = (project.fix_timeout_minutes or 30) * 60
 
+        # 容器工作目录设为项目代码目录，让 Claude Code 能看到 .git
+        cwd_for_docker = project_code_path if project_code_path else session_workspace
+
         return await self._run_docker(
-            workspace_dir=session_workspace,
+            workspace_dir=cwd_for_docker,
             user_input=user_input,
             model=model,
             max_turns=max_turns,

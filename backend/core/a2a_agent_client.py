@@ -96,6 +96,10 @@ class A2AAgentClient:
                 return result if result else "A2A Agent 未返回文本响应"
 
         except Exception as e:
-            error_msg = f"A2A Agent 调用失败 [{self.agent_card_url}]: {e}"
+            error_detail = str(e)
+            # 尝试提取 HTTP 响应体
+            if hasattr(e, 'response') and hasattr(e.response, 'text'):
+                error_detail += f" | HTTP {e.response.status_code}: {e.response.text[:500]}"
+            error_msg = f"A2A Agent 调用失败 [{self.agent_card_url}]: {type(e).__name__}: {error_detail}"
             logger.error(error_msg)
             raise RuntimeError(error_msg)

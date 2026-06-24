@@ -22,7 +22,7 @@
 | 01 | [项目概述与技术架构](./01_项目概述与技术架构.md) | 项目背景、目标、核心指标、技术栈选型、整体架构图 | SQLite v1 策略，Linear 设计系统 |
 | 02 | [数据库设计](./02_数据库设计.md) | 15 张表完整定义、ER 图、资源目录表、索引设计 | `mcp_server_registry`, `knowledge_bases`, `skills_registry`, `workflow_traces` |
 | 03 | [API 设计](./03_API设计.md) | 10 组 API 端点，请求/响应格式，SSE 流式设计 | `/chat` 对话 API，`/mcp-servers/{id}/discover` |
-| 04 | [Agent 体系设计](./04_Agent体系设计.md) | 三种 Agent 类型（local/http/claudecode），知识库检索注入，资源目录选择机制 | `KnowledgeInjector`, `KeywordRetriever`, Claude Code CLI/SDK |
+| 04 | [Agent 体系设计](./04_Agent体系设计.md) | 五种 Agent 类型（local/http/a2a/claudecode/reasonix），容器化执行，知识库检索注入 | `DockerClaudeCodeRunner`, `DockerReasonixRunner`, A2A SDK |
 | 05 | [工作流编排引擎](./05_工作流编排引擎.md) | LangGraph StateGraph 实现，监督者/顺序/图模式，错误处理，并行组，人工中断，工作空间接力 | `WorkflowWorkspaceManager`, `context.json` |
 | 06 | [MCP 协议与实现](./06_MCP协议与实现.md) | JSON-RPC 2.0 协议细节，进程生命周期管理，工具发现，LangChain 适配 | 惰性启动，心跳检查，空闲回收 |
 | 07 | [执行追踪与可观测性](./07_执行追踪与可观测性.md) | 三层追踪树，文件存储 + DB 元数据，WebSocket 实时推送，结构化日志，监控指标 | `ExecutionTracer`, `TraceCallback` |
@@ -44,7 +44,7 @@
 
 | 概念 | 位置 | 说明 |
 |------|------|------|
-| Agent 类型 | 04 §5.3/5.6/5.9 | local (LangChain) / http (远程) / claudecode (Claude Code) |
+| Agent 类型 | 04 §5.3/5.6/5.7/5.9 | local / http / a2a / claudecode (容器化) / reasonix (容器化) |
 | 资源目录 | 02 §3.3 | MCP Server、知识库、Skill 平台级注册 + Agent 按需选用 |
 | 知识库检索 | 04 §5.5 | v1 Markdown 分块 + 关键词匹配，预留 Chroma 向量库 |
 | 工作空间接力 | 05 §5.10 | 通用 workspace 模型，Engine 创建 + Agent 接力共享产物 |

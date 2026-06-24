@@ -1,10 +1,10 @@
 import asyncio
 import json
 import os
+import shlex
 import tempfile
 from typing import Dict, Any, List
 
-import docker
 from loguru import logger
 
 from core.session_manager import session_manager
@@ -13,7 +13,8 @@ from core.session_manager import session_manager
 class DockerReasonixRunner:
     """Reasonix (DeepSeek) executor that runs in an isolated Docker container.
 
-    Uses Docker SDK (docker-py) to manage containers via the Docker socket.
+    Uses asyncio.subprocess to run docker commands.
+    User input is passed via stdin pipe.
     """
 
     IMAGE = os.environ.get("REASONIX_IMAGE", "hh-reasonix:latest")
@@ -120,13 +121,13 @@ class DockerReasonixRunner:
         )
 
     # ------------------------------------------------------------------
-    # Docker execution (SDK)
+    # Docker execution (subprocess + stdin pipe)
     # ------------------------------------------------------------------
 
     async def _run_docker(self, workspace_dir: str, user_input: str,
                           api_key: str, model: str,
                           timeout_seconds: int) -> str:
-        """Execute reasonix CLI inside a disposable Docker container via Docker SDK."""
+        """Execute reasonix CLI inside a disposable Docker container."""
 
         # Write reasonix config (API key) to temp dir
         config_dir = tempfile.mkdtemp(prefix="reasonix_cfg_")
@@ -140,88 +141,76 @@ class DockerReasonixRunner:
         with open(toml_path, "w", encoding="utf-8") as f:
             f.write(toml_content)
 
-        # Write user_input inside workspace (already mounted)
-        input_path = os.path.join(workspace_dir, ".user_input.txt")
-        with open(input_path, "w", encoding="utf-8") as f:
-            f.write(user_input)
+        inner_cmd = 'reasonix run "$(cat)"'
 
-        reasonix_cmd = 'reasonix run "$(cat /workspace/.user_input.txt)"'
+        cmd = [
+            "docker", "run", "--rm", "-i",
+            "--network", self.NETWORK,
+            "--user", "1001:1001",
+            "-v", f"{workspace_dir}:/workspace",
+            "-v", f"{config_path}:/home/reasonixuser/.reasonix/config.json:ro",
+            "-w", "/workspace",
+            "--memory", "512m",
+            "--cpus", "1.0",
+            self.IMAGE,
+            "sh", "-c", inner_cmd,
+        ]
 
         logger.info(f"Docker Reasonix: image={self.IMAGE}, model={model}, "
                     f"cwd={workspace_dir}, timeout={timeout_seconds}s")
 
         try:
-            result_text = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._docker_run,
-                    workspace_dir, config_path, reasonix_cmd, timeout_seconds,
-                ),
-                timeout=timeout_seconds + 30,
+            echo_proc = await asyncio.create_subprocess_exec(
+                "echo", "-n", user_input,
+                stdout=asyncio.subprocess.PIPE,
             )
-            return result_text
+
+            docker_proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=echo_proc.stdout,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            echo_proc.stdout.close()
+            stdout, stderr = await asyncio.wait_for(
+                docker_proc.communicate(),
+                timeout=timeout_seconds,
+            )
+
+            stderr_text = stderr.decode("utf-8", errors="replace")
+            if stderr_text.strip():
+                logger.debug(f"Docker stderr: {stderr_text[:500]}")
+
+            if docker_proc.returncode != 0:
+                logger.error(f"Docker container exited with code {docker_proc.returncode}: {stderr_text[:500]}")
+                return f"Error: Reasonix container failed (exit {docker_proc.returncode}): {stderr_text[:500]}"
+
+            output = stdout.decode("utf-8", errors="replace")
+            try:
+                result = json.loads(output)
+                if isinstance(result, dict):
+                    return result.get("result", result.get("output", json.dumps(result, ensure_ascii=False)))
+                return str(result)
+            except json.JSONDecodeError:
+                return output.strip() if output.strip() else "Execution completed (no output)"
+
         except asyncio.TimeoutError:
             logger.error(f"Docker Reasonix timed out after {timeout_seconds}s")
             return f"Error: Reasonix execution timed out after {timeout_seconds} seconds"
+        except FileNotFoundError:
+            logger.error("Docker not found. Ensure Docker is installed and in PATH.")
+            return "Error: Docker not available - cannot execute Reasonix agent"
         except Exception as e:
             logger.error(f"Docker Reasonix execution failed: {e}")
             return f"Error: Reasonix container execution failed - {e}"
         finally:
             try:
-                os.unlink(input_path)
                 os.unlink(config_path)
                 os.rmdir(config_dir)
                 os.unlink(toml_path)
             except OSError:
                 pass
-
-    def _docker_run(self, workspace_dir: str,
-                    config_path: str, reasonix_cmd: str, timeout_seconds: int) -> str:
-        """Synchronous Docker SDK call — runs in thread pool."""
-        client = docker.from_env()
-        container = None
-        try:
-            container = client.containers.run(
-                image=self.IMAGE,
-                command=["sh", "-c", reasonix_cmd],
-                network=self.NETWORK,
-                volumes={
-                    workspace_dir: {"bind": "/workspace", "mode": "rw"},
-                    config_path: {"bind": "/home/reasonixuser/.reasonix/config.json", "mode": "ro"},
-                },
-                working_dir="/workspace",
-                mem_limit="512m",
-                nano_cpus=1_000_000_000,
-                detach=True,
-                user="1001:1001",
-            )
-
-            result = container.wait(timeout=timeout_seconds)
-            exit_code = result.get("StatusCode", -1)
-
-            stdout = container.logs(stdout=True, stderr=False).decode("utf-8", errors="replace")
-            stderr = container.logs(stdout=False, stderr=True).decode("utf-8", errors="replace")
-
-            if stderr.strip():
-                logger.debug(f"Docker stderr: {stderr[:500]}")
-
-            if exit_code != 0:
-                logger.error(f"Docker container exited with code {exit_code}: {stderr[:500]}")
-                return f"Error: Reasonix container failed (exit {exit_code}): {stderr[:500]}"
-
-            try:
-                parsed = json.loads(stdout)
-                if isinstance(parsed, dict):
-                    return parsed.get("result", parsed.get("output", json.dumps(parsed, ensure_ascii=False)))
-                return str(parsed)
-            except json.JSONDecodeError:
-                return stdout.strip() if stdout.strip() else "Execution completed (no output)"
-
-        finally:
-            if container:
-                try:
-                    container.remove(force=True)
-                except Exception:
-                    pass
 
     # ------------------------------------------------------------------
     # Project instructions writer

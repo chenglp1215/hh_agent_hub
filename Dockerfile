@@ -1,10 +1,15 @@
 # ============================================
 # 多Agent协同平台 - 后端镜像 (main + worker 共用)
 # ============================================
+FROM docker:27 AS docker-cli
+
 FROM python:3.11-slim
 
 LABEL app="hh-agent-hub"
 LABEL description="Multi-Agent Collaboration Platform Backend"
+
+# 从 docker 镜像复制 CLI（用于启动 claudecode/reasonix 容器）
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 
 # 系统依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \

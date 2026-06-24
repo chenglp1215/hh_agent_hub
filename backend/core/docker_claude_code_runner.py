@@ -1,10 +1,9 @@
 import asyncio
 import json
 import os
-import tempfile
+import shlex
 from typing import Dict, Any, List
 
-import docker
 from loguru import logger
 
 from core.session_manager import session_manager
@@ -13,7 +12,8 @@ from core.session_manager import session_manager
 class DockerClaudeCodeRunner:
     """Claude Code executor that runs in an isolated Docker container.
 
-    Uses Docker SDK (docker-py) to manage containers via the Docker socket.
+    Uses asyncio.subprocess to run docker commands.
+    User input is passed via stdin pipe (echo ... | docker run ... sh -c 'claude ... < /dev/stdin').
     """
 
     IMAGE = os.environ.get("CLAUDECODE_IMAGE", "hh-claudecode:latest")
@@ -176,107 +176,112 @@ class DockerClaudeCodeRunner:
         )
 
     # ------------------------------------------------------------------
-    # Docker execution (SDK)
+    # Docker execution (subprocess + stdin pipe)
     # ------------------------------------------------------------------
 
     async def _run_docker(self, workspace_dir: str, user_input: str,
                           model: str, max_turns: int, permission_mode: str,
                           timeout_seconds: int,
                           env_vars: Dict[str, str] = None) -> str:
-        """Execute claude CLI inside a disposable Docker container via Docker SDK."""
+        """Execute claude CLI inside a disposable Docker container.
 
-        # Write user_input inside workspace (already mounted in container)
-        input_path = os.path.join(workspace_dir, ".user_input.txt")
-        with open(input_path, "w", encoding="utf-8") as f:
-            f.write(user_input)
+        User input is passed via stdin pipe using echo + sh -c.
+        """
 
-        # Build the claude command
-        claude_cmd = (
+        # Build docker run args
+        docker_args = [
+            "docker", "run", "--rm",
+            "--network", self.NETWORK,
+            "--user", "1001:1001",
+            "-v", f"{workspace_dir}:/workspace",
+            "-w", "/workspace",
+            "--memory", "512m",
+            "--cpus", "1.0",
+        ]
+
+        # Pass API config as env vars
+        if env_vars:
+            for k, v in env_vars.items():
+                docker_args.extend(["-e", f"{k}={v}"])
+
+        # Build claude command inside container.
+        # Use sh -c with stdin redirect: read prompt from stdin piped by echo.
+        inner_cmd = (
             f'claude --print --output-format json'
-            f' --model {model}'
+            f' --model {shlex.quote(model)}'
             f' --max-turns {max_turns}'
-            f' --permission-mode {permission_mode}'
+            f' --permission-mode {shlex.quote(permission_mode)}'
             f' --dangerously-skip-permissions'
-            f' -p "$(cat /workspace/.user_input.txt)"'
+            f' -p -'
         )
 
-        env_list = []
-        if env_vars:
-            env_list = [f"{k}={v}" for k, v in env_vars.items()]
+        docker_args.extend([self.IMAGE, "sh", "-c", inner_cmd])
 
         logger.info(f"Docker Claude Code: image={self.IMAGE}, model={model}, "
                     f"max_turns={max_turns}, cwd={workspace_dir}, timeout={timeout_seconds}s")
 
         try:
-            result_text = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._docker_run,
-                    workspace_dir, claude_cmd, env_list, timeout_seconds,
-                ),
-                timeout=timeout_seconds + 30,
+            # Build full docker command list
+            cmd = [
+                "docker", "run", "--rm", "-i",
+                "--network", self.NETWORK,
+                "--user", "1001:1001",
+                "-v", f"{workspace_dir}:/workspace",
+                "-w", "/workspace",
+                "--memory", "512m",
+                "--cpus", "1.0",
+            ]
+            if env_vars:
+                for k, v in env_vars.items():
+                    cmd.extend(["-e", f"{k}={v}"])
+            cmd.extend([self.IMAGE, "sh", "-c", inner_cmd])
+
+            # Use echo to pipe user_input to docker's stdin.
+            # docker run -i keeps stdin open, sh -c 'claude ... -p -' reads from it.
+            echo_proc = await asyncio.create_subprocess_exec(
+                "echo", "-n", user_input,
+                stdout=asyncio.subprocess.PIPE,
             )
-            return result_text
+
+            docker_proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=echo_proc.stdout,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            echo_proc.stdout.close()
+            stdout, stderr = await asyncio.wait_for(
+                docker_proc.communicate(),
+                timeout=timeout_seconds,
+            )
+
+            stderr_text = stderr.decode("utf-8", errors="replace")
+            if stderr_text.strip():
+                logger.debug(f"Docker stderr: {stderr_text[:500]}")
+
+            if docker_proc.returncode != 0:
+                logger.error(f"Docker container exited with code {docker_proc.returncode}: {stderr_text[:500]}")
+                return f"Error: Claude Code container failed (exit {docker_proc.returncode}): {stderr_text[:500]}"
+
+            output = stdout.decode("utf-8", errors="replace")
+            try:
+                result = json.loads(output)
+                if isinstance(result, dict):
+                    return result.get("result", result.get("output", json.dumps(result, ensure_ascii=False)))
+                return str(result)
+            except json.JSONDecodeError:
+                return output.strip() if output.strip() else "Execution completed (no output)"
+
         except asyncio.TimeoutError:
             logger.error(f"Docker Claude Code timed out after {timeout_seconds}s")
             return f"Error: Claude Code execution timed out after {timeout_seconds} seconds"
+        except FileNotFoundError:
+            logger.error("Docker not found. Ensure Docker is installed and in PATH.")
+            return "Error: Docker not available - cannot execute Claude Code agent"
         except Exception as e:
             logger.error(f"Docker Claude Code execution failed: {e}")
             return f"Error: Claude Code container execution failed - {e}"
-        finally:
-            try:
-                os.unlink(input_path)
-            except OSError:
-                pass
-
-    def _docker_run(self, workspace_dir: str,
-                    claude_cmd: str, env_list: list, timeout_seconds: int) -> str:
-        """Synchronous Docker SDK call — runs in thread pool."""
-        client = docker.from_env()
-        container = None
-        try:
-            container = client.containers.run(
-                image=self.IMAGE,
-                command=["sh", "-c", claude_cmd],
-                network=self.NETWORK,
-                volumes={
-                    workspace_dir: {"bind": "/workspace", "mode": "rw"},
-                },
-                working_dir="/workspace",
-                environment=env_list or None,
-                mem_limit="512m",
-                nano_cpus=1_000_000_000,  # 1 CPU
-                detach=True,
-                user="1001:1001",
-            )
-
-            # Wait for completion
-            result = container.wait(timeout=timeout_seconds)
-            exit_code = result.get("StatusCode", -1)
-
-            stdout = container.logs(stdout=True, stderr=False).decode("utf-8", errors="replace")
-            stderr = container.logs(stdout=False, stderr=True).decode("utf-8", errors="replace")
-
-            if stderr.strip():
-                logger.debug(f"Docker stderr: {stderr[:500]}")
-
-            if exit_code != 0:
-                logger.error(f"Docker container exited with code {exit_code}: {stderr[:500]}")
-                return f"Error: Claude Code container failed (exit {exit_code}): {stderr[:500]}"
-
-            try:
-                parsed = json.loads(stdout)
-                if isinstance(parsed, dict):
-                    return parsed.get("result", parsed.get("output", json.dumps(parsed, ensure_ascii=False)))
-                return str(parsed)
-            except json.JSONDecodeError:
-                return stdout.strip() if stdout.strip() else "Execution completed (no output)"
-
-        finally:
-            if container:
-                try:
-                    container.remove(force=True)
-                except Exception:
-                    pass
 
     # ------------------------------------------------------------------
     # CLAUDE.md writer

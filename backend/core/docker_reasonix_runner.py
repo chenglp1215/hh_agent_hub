@@ -193,8 +193,7 @@ class DockerReasonixRunner:
                 mem_limit="512m",
                 nano_cpus=1_000_000_000,
                 detach=True,
-                remove=True,
-                stop_timeout=10,
+                auto_remove=True,
                 user="1001:1001",
             )
 

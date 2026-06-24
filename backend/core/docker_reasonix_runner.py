@@ -149,6 +149,8 @@ class DockerReasonixRunner:
         with open(toml_path, "w", encoding="utf-8") as f:
             f.write(toml_content)
 
+        host_workspace = self._to_host_path(workspace_dir)
+
         inner_cmd = 'reasonix run "$(cat)"'
 
         cmd = [
@@ -163,8 +165,6 @@ class DockerReasonixRunner:
             self.IMAGE,
             "sh", "-c", inner_cmd,
         ]
-
-        host_workspace = self._to_host_path(workspace_dir)
 
         logger.info(f"Docker Reasonix: image={self.IMAGE}, model={model}, "
                     f"cwd={host_workspace}, timeout={timeout_seconds}s")

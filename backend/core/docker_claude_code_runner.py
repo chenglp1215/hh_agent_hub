@@ -199,24 +199,9 @@ class DockerClaudeCodeRunner:
         User input is passed via stdin pipe using echo + sh -c.
         """
 
-        # Build docker run args
-        docker_args = [
-            "docker", "run", "--rm",
-            "--network", self.NETWORK,
-            "--user", "1001:1001",
-            "-v", f"{host_workspace}:/workspace",
-            "-w", "/workspace",
-            "--memory", "512m",
-            "--cpus", "1.0",
-        ]
-
-        # Pass API config as env vars
-        if env_vars:
-            for k, v in env_vars.items():
-                docker_args.extend(["-e", f"{k}={v}"])
+        host_workspace = self._to_host_path(workspace_dir)
 
         # Build claude command inside container.
-        # Use sh -c with stdin redirect: read prompt from stdin piped by echo.
         inner_cmd = (
             f'claude --print --output-format json'
             f' --model {shlex.quote(model)}'
@@ -225,10 +210,6 @@ class DockerClaudeCodeRunner:
             f' --dangerously-skip-permissions'
             f' -p -'
         )
-
-        docker_args.extend([self.IMAGE, "sh", "-c", inner_cmd])
-
-        host_workspace = self._to_host_path(workspace_dir)
 
         logger.info(f"Docker Claude Code: image={self.IMAGE}, model={model}, "
                     f"max_turns={max_turns}, cwd={host_workspace}, timeout={timeout_seconds}s")

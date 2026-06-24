@@ -1,10 +1,10 @@
 import asyncio
 import json
 import os
-import shlex
 import tempfile
 from typing import Dict, Any, List
 
+import docker
 from loguru import logger
 
 from core.session_manager import session_manager
@@ -13,19 +13,11 @@ from core.session_manager import session_manager
 class DockerClaudeCodeRunner:
     """Claude Code executor that runs in an isolated Docker container.
 
-    Reuses ClaudeCodeRunner's preparation logic (config resolution, git,
-    CLAUDE.md, settings.json) but executes claude CLI inside a disposable
-    Docker container via ``docker run --rm``.
-
-    Workspace layout (same as ClaudeCodeRunner):
-      {session_workspace}/
-        projects/{project_name}/code/    ← git repo
-        agents/{agent_name}/             ← agent workspace
-        CLAUDE.md                        ← system prompt + skills + KB
-        .claude/settings.json            ← permissions (from settings_json)
+    Uses Docker SDK (docker-py) to manage containers via the Docker socket.
     """
 
     IMAGE = os.environ.get("CLAUDECODE_IMAGE", "hh-claudecode:latest")
+    NETWORK = os.environ.get("DOCKER_NETWORK", "hh_agent_hub_agent-net")
 
     def __init__(self, config: Dict[str, Any] = None,
                  mcp_servers: List[Dict] = None,
@@ -89,17 +81,14 @@ class DockerClaudeCodeRunner:
         force_pull = self._needs_code_pull(context)
         ensure_code_exists(project, project_code_path, force_pull=force_pull)
 
-        # Write CLAUDE.md and settings.json (same as ClaudeCodeRunner)
         self._write_claude_md(session_workspace, context, project.system_prompt,
                               project_code_path=project_code_path)
         self._write_claude_settings(session_workspace, settings)
 
-        # Resolve execution parameters
         model = settings.model or "claude-sonnet-4-6"
         max_turns = settings.max_turns or 25
         permission_mode = settings.permission_mode or "acceptEdits"
 
-        # Check settings_json for env/model overrides
         extra_settings = {}
         if settings.settings_json and settings.settings_json.strip():
             try:
@@ -153,12 +142,11 @@ class DockerClaudeCodeRunner:
         else:
             work_dir = self.config.get("work_dir", os.getcwd())
 
-        # Write .claude/settings.json
         claude_dir = os.path.join(work_dir, ".claude")
         os.makedirs(claude_dir, exist_ok=True)
         if settings_json and settings_json.strip():
             try:
-                json.loads(settings_json)  # validate
+                json.loads(settings_json)
                 with open(os.path.join(claude_dir, "settings.json"), "w", encoding="utf-8") as f:
                     f.write(settings_json)
             except json.JSONDecodeError:
@@ -188,14 +176,14 @@ class DockerClaudeCodeRunner:
         )
 
     # ------------------------------------------------------------------
-    # Docker execution
+    # Docker execution (SDK)
     # ------------------------------------------------------------------
 
     async def _run_docker(self, workspace_dir: str, user_input: str,
                           model: str, max_turns: int, permission_mode: str,
                           timeout_seconds: int,
                           env_vars: Dict[str, str] = None) -> str:
-        """Execute claude CLI inside a disposable Docker container."""
+        """Execute claude CLI inside a disposable Docker container via Docker SDK."""
 
         # Write user_input to a temp file, mount into container
         fd, input_path = tempfile.mkstemp(suffix=".txt", prefix="claude_input_")
@@ -203,74 +191,35 @@ class DockerClaudeCodeRunner:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(user_input)
 
-            docker_args = [
-                "docker", "run", "--rm",
-                "--network", os.environ.get("DOCKER_NETWORK", "hh_agent_hub_agent-net"),
-                "--user", "1001:1001",
-                "-v", f"{workspace_dir}:/workspace",
-                "-v", f"{input_path}:/tmp/user_input.txt:ro",
-                "-w", "/workspace",
-                "--memory", "512m",
-                "--cpus", "1.0",
-                "--stop-timeout", "10",
-            ]
-
-            # Pass API config as env vars
-            if env_vars:
-                for k, v in env_vars.items():
-                    docker_args.extend(["-e", f"{k}={v}"])
-
-            # Build the claude command that runs INSIDE the container via sh -c.
-            # User input is read from the mounted file. Double quotes around
-            # $(cat ...) preserve newlines and most special characters.
-            inner_cmd = (
-                f"claude --print --output-format json"
-                f" --model {shlex.quote(model)}"
-                f" --max-turns {max_turns}"
-                f" --permission-mode {shlex.quote(permission_mode)}"
-                f" --dangerously-skip-permissions"
-                f" -p \"$(cat /tmp/user_input.txt)\""
+            # Build the claude command
+            claude_cmd = (
+                f'claude --print --output-format json'
+                f' --model {model}'
+                f' --max-turns {max_turns}'
+                f' --permission-mode {permission_mode}'
+                f' --dangerously-skip-permissions'
+                f' -p "$(cat /tmp/user_input.txt)"'
             )
 
-            docker_args.extend([self.IMAGE, "sh", "-c", inner_cmd])
+            env_list = []
+            if env_vars:
+                env_list = [f"{k}={v}" for k, v in env_vars.items()]
 
             logger.info(f"Docker Claude Code: image={self.IMAGE}, model={model}, "
                         f"max_turns={max_turns}, cwd={workspace_dir}, timeout={timeout_seconds}s")
 
-            process = await asyncio.create_subprocess_exec(
-                *docker_args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            result_text = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self._docker_run,
+                    workspace_dir, input_path, claude_cmd, env_list, timeout_seconds,
+                ),
+                timeout=timeout_seconds + 30,
             )
-
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=timeout_seconds,
-            )
-
-            stderr_text = stderr.decode("utf-8", errors="replace")
-            if stderr_text.strip():
-                logger.debug(f"Docker stderr: {stderr_text[:500]}")
-
-            if process.returncode != 0:
-                logger.error(f"Docker container exited with code {process.returncode}: {stderr_text[:500]}")
-                return f"Error: Claude Code container failed (exit {process.returncode}): {stderr_text[:500]}"
-
-            output = stdout.decode("utf-8", errors="replace")
-            try:
-                result = json.loads(output)
-                if isinstance(result, dict):
-                    return result.get("result", result.get("output", json.dumps(result, ensure_ascii=False)))
-                return str(result)
-            except json.JSONDecodeError:
-                return output if output.strip() else "Execution completed (no output)"
+            return result_text
 
         except asyncio.TimeoutError:
             logger.error(f"Docker Claude Code timed out after {timeout_seconds}s")
             return f"Error: Claude Code execution timed out after {timeout_seconds} seconds"
-        except FileNotFoundError:
-            logger.error("Docker not found. Ensure Docker is installed and in PATH.")
-            return "Error: Docker not available - cannot execute Claude Code agent"
         except Exception as e:
             logger.error(f"Docker Claude Code execution failed: {e}")
             return f"Error: Claude Code container execution failed - {e}"
@@ -280,8 +229,61 @@ class DockerClaudeCodeRunner:
             except OSError:
                 pass
 
+    def _docker_run(self, workspace_dir: str, input_path: str,
+                    claude_cmd: str, env_list: list, timeout_seconds: int) -> str:
+        """Synchronous Docker SDK call — runs in thread pool."""
+        client = docker.from_env()
+        container = None
+        try:
+            container = client.containers.run(
+                image=self.IMAGE,
+                command=["sh", "-c", claude_cmd],
+                network=self.NETWORK,
+                volumes={
+                    workspace_dir: {"bind": "/workspace", "mode": "rw"},
+                    input_path: {"bind": "/tmp/user_input.txt", "mode": "ro"},
+                },
+                working_dir="/workspace",
+                environment=env_list or None,
+                mem_limit="512m",
+                nano_cpus=1_000_000_000,  # 1 CPU
+                detach=True,
+                remove=True,
+                stop_timeout=10,
+                user="1001:1001",
+            )
+
+            # Wait for completion
+            result = container.wait(timeout=timeout_seconds)
+            exit_code = result.get("StatusCode", -1)
+
+            stdout = container.logs(stdout=True, stderr=False).decode("utf-8", errors="replace")
+            stderr = container.logs(stdout=False, stderr=True).decode("utf-8", errors="replace")
+
+            if stderr.strip():
+                logger.debug(f"Docker stderr: {stderr[:500]}")
+
+            if exit_code != 0:
+                logger.error(f"Docker container exited with code {exit_code}: {stderr[:500]}")
+                return f"Error: Claude Code container failed (exit {exit_code}): {stderr[:500]}"
+
+            try:
+                parsed = json.loads(stdout)
+                if isinstance(parsed, dict):
+                    return parsed.get("result", parsed.get("output", json.dumps(parsed, ensure_ascii=False)))
+                return str(parsed)
+            except json.JSONDecodeError:
+                return stdout.strip() if stdout.strip() else "Execution completed (no output)"
+
+        finally:
+            if container:
+                try:
+                    container.remove(force=True)
+                except Exception:
+                    pass
+
     # ------------------------------------------------------------------
-    # CLAUDE.md writer (same as ClaudeCodeRunner)
+    # CLAUDE.md writer
     # ------------------------------------------------------------------
 
     def _write_claude_md(self, work_dir: str, context: Dict[str, Any] = None,

@@ -263,7 +263,10 @@ class AgentNodeFactory:
     def _extract_token_usage(self, message, task_id: str, llm):
         """从 AIMessage 中提取 token 使用量"""
         from core.token_tracker import record_token_usage
+        from loguru import logger
         model_name = None
+
+        logger.debug(f"[_extract_token_usage] task_id={task_id}, message type={type(message).__name__}")
 
         # 从 LLM 获取 model_name
         if hasattr(llm, 'model'):

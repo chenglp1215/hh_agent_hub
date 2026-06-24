@@ -205,7 +205,7 @@ class DockerClaudeCodeRunner:
 
             docker_args = [
                 "docker", "run", "--rm",
-                "--network", "agent-net",
+                "--network", os.environ.get("DOCKER_NETWORK", "hh_agent_hub_agent-net"),
                 "--user", "1001:1001",
                 "-v", f"{workspace_dir}:/workspace",
                 "-v", f"{input_path}:/tmp/user_input.txt:ro",

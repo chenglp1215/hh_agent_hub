@@ -158,7 +158,7 @@ class DockerReasonixRunner:
             docker_args = [
                 "docker", "run", "--rm",
                 "--network", "agent-net",
-                "--user", "1000:1000",
+                "--user", "1001:1001",
                 "-v", f"{workspace_dir}:/workspace",
                 "-v", f"{config_path}:/home/reasonixuser/.reasonix/config.json:ro",
                 "-v", f"{input_path}:/tmp/user_input.txt:ro",

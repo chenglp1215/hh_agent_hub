@@ -10,8 +10,8 @@ LABEL description="Lightweight Claude Code execution container"
 RUN apk add --no-cache git bash \
     && npm install -g @anthropic-ai/claude-code
 
-# 非 root 用户，与 worker 的 appuser UID 一致
-RUN adduser -D -u 1000 claudeuser
+# 非 root 用户（node 镜像已有 uid 1000 的 node 用户，用 1001 避免冲突）
+RUN adduser -D -u 1001 claudeuser
 
 USER claudeuser
 WORKDIR /workspace

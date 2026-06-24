@@ -221,8 +221,8 @@ class DockerClaudeCodeRunner:
                     f"max_turns={max_turns}, cwd={workspace_dir}, timeout={timeout_seconds}s")
 
         try:
-            # Build full docker command list
-            cmd = [
+            # Build docker run command parts
+            docker_parts = [
                 "docker", "run", "--rm", "-i",
                 "--network", self.NETWORK,
                 "--user", "1001:1001",
@@ -233,24 +233,18 @@ class DockerClaudeCodeRunner:
             ]
             if env_vars:
                 for k, v in env_vars.items():
-                    cmd.extend(["-e", f"{k}={v}"])
-            cmd.extend([self.IMAGE, "sh", "-c", inner_cmd])
+                    docker_parts.extend(["-e", f"{k}={v}"])
+            docker_parts.extend([self.IMAGE, "sh", "-c", inner_cmd])
 
-            # Use echo to pipe user_input to docker's stdin.
-            # docker run -i keeps stdin open, sh -c 'claude ... -p -' reads from it.
-            echo_proc = await asyncio.create_subprocess_exec(
-                "echo", "-n", user_input,
-                stdout=asyncio.subprocess.PIPE,
-            )
+            # Use shell pipe: echo "input" | docker run -i ...
+            shell_cmd = f'{shlex.join(["echo", "-n", user_input])} | {shlex.join(docker_parts)}'
 
-            docker_proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=echo_proc.stdout,
+            docker_proc = await asyncio.create_subprocess_shell(
+                shell_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            echo_proc.stdout.close()
             stdout, stderr = await asyncio.wait_for(
                 docker_proc.communicate(),
                 timeout=timeout_seconds,

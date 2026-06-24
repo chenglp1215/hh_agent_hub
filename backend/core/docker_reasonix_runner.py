@@ -160,19 +160,15 @@ class DockerReasonixRunner:
                     f"cwd={workspace_dir}, timeout={timeout_seconds}s")
 
         try:
-            echo_proc = await asyncio.create_subprocess_exec(
-                "echo", "-n", user_input,
-                stdout=asyncio.subprocess.PIPE,
-            )
+            # Use shell pipe: echo "input" | docker run -i ...
+            shell_cmd = f'{shlex.join(["echo", "-n", user_input])} | {shlex.join(cmd)}'
 
-            docker_proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=echo_proc.stdout,
+            docker_proc = await asyncio.create_subprocess_shell(
+                shell_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            echo_proc.stdout.close()
             stdout, stderr = await asyncio.wait_for(
                 docker_proc.communicate(),
                 timeout=timeout_seconds,

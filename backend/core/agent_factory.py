@@ -239,7 +239,7 @@ class AgentNodeFactory:
 
             # 提取 token 使用量
             task_id = state.get("task_id", "")
-            logger.debug(f"[Agent: {agent_name}] task_id={task_id}, has_message={last_message is not None}")
+            logger.info(f"[Agent: {agent_name}] task_id={task_id}, has_message={last_message is not None}")
             if task_id and last_message:
                 self._extract_token_usage(last_message, task_id, llm)
 
@@ -267,7 +267,7 @@ class AgentNodeFactory:
         from loguru import logger
         model_name = None
 
-        logger.debug(f"[_extract_token_usage] task_id={task_id}, message type={type(message).__name__}")
+        logger.info(f"[_extract_token_usage] task_id={task_id}, message type={type(message).__name__}")
 
         # 从 LLM 获取 model_name
         if hasattr(llm, 'model'):

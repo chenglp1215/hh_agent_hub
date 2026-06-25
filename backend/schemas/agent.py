@@ -18,6 +18,8 @@ class AgentCreate(BaseModel):
     mcp_links: List[Dict[str, Any]] = []
     kb_ids: List[int] = []
     skill_ids: List[int] = []
+    supervisor_prompt_template: Optional[str] = "free_route"
+    custom_prompt_override: Optional[str] = None
 
 
 class AgentUpdate(BaseModel):
@@ -36,6 +38,8 @@ class AgentUpdate(BaseModel):
     kb_ids: Optional[List[int]] = None
     skill_ids: Optional[List[int]] = None
     status: Optional[str] = None
+    supervisor_prompt_template: Optional[str] = None
+    custom_prompt_override: Optional[str] = None
 
 
 class AgentTestRequest(BaseModel):

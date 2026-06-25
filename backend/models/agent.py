@@ -19,6 +19,8 @@ class Agent(Model):
     skills = fields.JSONField(default=list)
     custom_tools = fields.JSONField(default=list)
     knowledge_base_ids = fields.JSONField(default=list)
+    supervisor_prompt_template = fields.CharField(max_length=30, default="free_route")
+    custom_prompt_override = fields.TextField(null=True)
     status = fields.CharField(max_length=20, default="active")
     created_by = fields.ForeignKeyField("models.User", null=True, on_delete=fields.SET_NULL)
     created_at = fields.DatetimeField(auto_now_add=True)

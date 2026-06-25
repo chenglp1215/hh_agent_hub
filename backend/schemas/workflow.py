@@ -15,6 +15,7 @@ class WorkflowCreate(BaseModel):
     agent_timeout_seconds: int = 60
     workflow_timeout_seconds: int = 300
     max_retries: int = 2
+    max_supervisor_rounds: int = Field(default=5, ge=1, le=20)
 
 
 class WorkflowUpdate(BaseModel):
@@ -30,6 +31,7 @@ class WorkflowUpdate(BaseModel):
     agent_timeout_seconds: Optional[int] = None
     workflow_timeout_seconds: Optional[int] = None
     max_retries: Optional[int] = None
+    max_supervisor_rounds: Optional[int] = Field(default=None, ge=1, le=20)
     status: Optional[str] = None
 
 

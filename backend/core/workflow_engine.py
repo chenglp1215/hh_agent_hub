@@ -2,6 +2,7 @@ import re
 from typing import TypedDict, List, Any, Dict, Optional
 from langgraph.graph import StateGraph, END
 from loguru import logger
+from core.prompt_templates import render_prompt
 
 
 class AgentState(TypedDict):
@@ -17,6 +18,8 @@ class AgentState(TypedDict):
     error: Optional[str]
     session_id: str
     session_workspace: str
+    termination_reason: Optional[str]
+    partial_completion: bool
 
 
 class WorkflowEngine:
@@ -26,7 +29,8 @@ class WorkflowEngine:
         pass
 
     async def build_workflow(self, workflow_config: Dict[str, Any],
-                             agent_nodes: Dict[str, Any]):
+                             agent_nodes: Dict[str, Any],
+                             agent_configs: Dict[str, Dict[str, Any]] = None):
         """根据工作流配置和 Agent 节点构建 LangGraph
 
         Args:
@@ -43,7 +47,7 @@ class WorkflowEngine:
         flow_type = workflow_config.get("flow_type", "sequential")
 
         if flow_type == "supervisor":
-            return await self._build_supervisor(workflow_config, agent_nodes)
+            return await self._build_supervisor(workflow_config, agent_nodes, agent_configs)
         elif flow_type == "sequential":
             return await self._build_sequential(workflow_config, agent_nodes)
         elif flow_type == "graph":
@@ -52,7 +56,8 @@ class WorkflowEngine:
             raise ValueError(f"Unsupported flow type: {flow_type}")
 
     async def _build_supervisor(self, config: Dict[str, Any],
-                                agent_nodes: Dict[str, Any]):
+                                agent_nodes: Dict[str, Any],
+                                agent_configs: Dict[str, Dict[str, Any]] = None):
         """监督者模式：Supervisor Agent 路由任务到 Worker Agents
 
         Supervisor Agent 收到用户输入后，决定将任务路由给哪个 Worker Agent，
@@ -74,20 +79,40 @@ class WorkflowEngine:
         graph = StateGraph(AgentState)
 
         # Add supervisor node (wrapped to parse routing decision)
-        MAX_SUPERVISOR_ROUNDS = 5
+        config_rounds = config.get("max_supervisor_rounds", 5)
+        max_supervisor_rounds = min(config_rounds, 20)
 
         async def supervisor_wrapper(state: AgentState) -> dict:
             trace = state.get("trace") or []
             intermediate = state.get("intermediate_results") or {}
             rounds = intermediate.get("_supervisor_rounds", 0)
 
-            if rounds >= MAX_SUPERVISOR_ROUNDS:
+            if rounds >= max_supervisor_rounds:
                 logger.warning(
-                    f"[Supervisor: {supervisor_name}] 已达最大轮次 {MAX_SUPERVISOR_ROUNDS}，强制结束"
+                    f"[Supervisor: {supervisor_name}] 已达最大轮次 {max_supervisor_rounds}，强制结束"
                 )
                 intermediate["_supervisor_rounds"] = rounds + 1
                 trace.append({"type": "supervisor_force_end", "round": rounds + 1})
-                return {"next_agent": "end", "intermediate_results": intermediate, "trace": trace}
+
+                # 汇总已有中间结果
+                summary_parts = []
+                for k, v in intermediate.items():
+                    if k.startswith("_") or k == supervisor_name:
+                        continue
+                    summary_parts.append(f"[{k}]:\n{str(v)[:3000]}")
+                if summary_parts:
+                    final_answer = "轮次耗尽，以下为已有结果：\n\n" + "\n\n".join(summary_parts)
+                else:
+                    final_answer = "轮次耗尽，未产生中间结果。"
+
+                return {
+                    "next_agent": "end",
+                    "final_answer": final_answer,
+                    "intermediate_results": intermediate,
+                    "trace": trace,
+                    "termination_reason": "rounds_exhausted",
+                    "partial_completion": True,
+                }
 
             logger.info(f"[Supervisor: {supervisor_name}] 第 {rounds + 1} 轮调度决策")
             trace.append({"type": "supervisor_start", "round": rounds + 1})
@@ -112,6 +137,28 @@ class WorkflowEngine:
                         "trace": trace,
                     }
 
+            # 获取 Supervisor Prompt 配置并渲染模板
+            agent_configs_safe = agent_configs or {}
+            supervisor_config = agent_configs_safe.get("__supervisor__", {})
+            worker_names_list = [n for n in config.get("worker_agent_ids", []) if isinstance(n, str) and n in agent_nodes]
+
+            # 构建模板变量
+            variables = {
+                "worker_list": ", ".join(worker_names_list),
+                "worker_descriptions": "\n".join(
+                    f"- {name}: {agent_configs_safe.get(name, {}).get('description', '无描述')[:200]}"
+                    for name in worker_names_list
+                ),
+                "max_iterations": max_supervisor_rounds
+            }
+
+            # 渲染 Prompt
+            system_prompt = render_prompt(
+                template_slug=supervisor_config.get("supervisor_prompt_template", "free_route"),
+                variables=variables,
+                custom_override=supervisor_config.get("custom_prompt_override")
+            )
+
             # 将前一轮 worker 的结果注入 messages，让 supervisor 感知到子代理已完成任务
             state_with_context = dict(state)
             worker_context_injected = False
@@ -135,8 +182,10 @@ class WorkflowEngine:
             if worker_context_injected:
                 out_msgs = result.get("messages", [])
                 if out_msgs:
-                    result["messages"] = [m for m in out_msgs
-                        if m.content != f"以下子代理已完成任务，请根据返回结果判断是否已满足用户需求：\n\n{context_msg}"]
+                    def _is_not_injected(m):
+                        content = m.get("content") if isinstance(m, dict) else getattr(m, "content", "")
+                        return content != f"以下子代理已完成任务，请根据返回结果判断是否已满足用户需求：\n\n{context_msg}"
+                    result["messages"] = [m for m in out_msgs if _is_not_injected(m)]
             trace = result.get("trace") or trace
             intermediate = result.get("intermediate_results") or {}
             intermediate["_supervisor_rounds"] = rounds + 1
@@ -145,8 +194,23 @@ class WorkflowEngine:
             match = re.search(r'^NEXT_AGENT:\s*(.+)$', output, re.MULTILINE)
             if match:
                 raw = match.group(1).strip()
-                result["next_agent"] = "end" if raw.lower() == "end" else raw
-                trace.append({"type": "supervisor_route", "round": rounds + 1, "target": result["next_agent"]})
+                next_agent = "end" if raw.lower() == "end" else raw
+
+                # 校验目标 Agent 是否存在
+                if next_agent != "end" and next_agent not in agent_nodes:
+                    logger.warning(f"[Supervisor: {supervisor_name}] 指向不存在的 Agent: {next_agent}，回退到 END")
+                    trace.append({
+                        "type": "routing_correction",
+                        "round": rounds + 1,
+                        "original_target": next_agent,
+                        "actual_target": "end",
+                        "reason": "target_not_found"
+                    })
+                    next_agent = "end"
+                else:
+                    trace.append({"type": "supervisor_route", "round": rounds + 1, "target": next_agent})
+
+                result["next_agent"] = next_agent
                 logger.info(f"[Supervisor: {supervisor_name}] 路由决策: {result['next_agent']}")
                 cleaned = re.sub(
                     r'^NEXT_AGENT:\s*.+$\n?', '', output, flags=re.MULTILINE

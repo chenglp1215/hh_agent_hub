@@ -15,6 +15,7 @@ class Workflow(Model):
     agent_timeout_seconds = fields.IntField(default=60)
     workflow_timeout_seconds = fields.IntField(default=300)
     max_retries = fields.IntField(default=2)
+    max_supervisor_rounds = fields.IntField(default=5)
     status = fields.CharField(max_length=20, default="draft")
     version = fields.IntField(default=1)
     created_by = fields.ForeignKeyField("models.User", null=True, on_delete=fields.SET_NULL)

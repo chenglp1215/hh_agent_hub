@@ -158,6 +158,14 @@
               <a-input-number v-model:value="workflowTimeout" :min="10" :max="3600" size="small" class="!w-20" />
               <span class="text-xs text-[#535b6e]">秒</span>
             </div>
+            <div v-if="flowType === 'supervisor'" class="flex items-center gap-3 mt-2">
+              <span class="text-xs text-[#535b6e] w-16 shrink-0">最大轮次</span>
+              <a-input-number v-model:value="maxSupervisorRounds" :min="1" :max="20" size="small" class="!w-20" />
+              <span class="text-xs text-[#535b6e]">轮</span>
+              <a-tooltip title="Supervisor 最大调度轮次，超出后自动结束并返回已有结果">
+                <QuestionCircleOutlined class="text-[#535b6e]" />
+              </a-tooltip>
+            </div>
           </div>
         </div>
       </div>
@@ -246,6 +254,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
   SaveOutlined, ExpandOutlined, ArrowUpOutlined, ArrowDownOutlined, DeleteOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons-vue'
 import { VueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
@@ -272,6 +281,7 @@ const flowType = ref('sequential')
 const errorStrategy = ref('fail_fast')
 const agentTimeout = ref(60)
 const workflowTimeout = ref(300)
+const maxSupervisorRounds = ref(5)
 
 // ---- Agents ----
 const agents = ref<any[]>([])
@@ -434,6 +444,7 @@ async function handleSave() {
       error_strategy: errorStrategy.value,
       agent_timeout_seconds: agentTimeout.value,
       workflow_timeout_seconds: workflowTimeout.value,
+      max_supervisor_rounds: maxSupervisorRounds.value,
     }
     if (flowType.value === 'sequential') {
       data.worker_agent_ids = orderedAgents.value.map(a => a.id)
@@ -519,6 +530,7 @@ onMounted(async () => {
       errorStrategy.value = w.error_strategy || 'fail_fast'
       agentTimeout.value = w.agent_timeout_seconds || 60
       workflowTimeout.value = w.workflow_timeout_seconds || 300
+      maxSupervisorRounds.value = w.max_supervisor_rounds || 5
 
       if (w.flow_type === 'supervisor') {
         supervisorAgentId.value = w.supervisor_agent_id

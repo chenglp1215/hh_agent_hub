@@ -32,6 +32,7 @@ async def list_workflows(
         "supervisor_agent_id": w.supervisor_agent_id,
         "worker_agent_ids": w.worker_agent_ids,
         "error_strategy": w.error_strategy,
+        "max_supervisor_rounds": w.max_supervisor_rounds,
         "created_at": w.created_at.isoformat() if w.created_at else None,
         "updated_at": w.updated_at.isoformat() if w.updated_at else None,
     } for w in workflows])
@@ -53,6 +54,7 @@ async def get_workflow(workflow_id: int, user=Depends(get_current_user)):
         "agent_timeout_seconds": w.agent_timeout_seconds,
         "workflow_timeout_seconds": w.workflow_timeout_seconds,
         "max_retries": w.max_retries,
+        "max_supervisor_rounds": w.max_supervisor_rounds,
         "status": w.status, "version": w.version,
         "created_at": w.created_at.isoformat() if w.created_at else None,
         "updated_at": w.updated_at.isoformat() if w.updated_at else None,
@@ -81,6 +83,7 @@ async def create_workflow(body: WorkflowCreate, user=Depends(get_current_user)):
         agent_timeout_seconds=body.agent_timeout_seconds,
         workflow_timeout_seconds=body.workflow_timeout_seconds,
         max_retries=body.max_retries,
+        max_supervisor_rounds=body.max_supervisor_rounds,
         status="draft", version=1, created_by=user,
     )
     logger.info(f"Workflow created: {w.name} (id={w.id})")
@@ -97,7 +100,7 @@ async def update_workflow(workflow_id: int, body: WorkflowUpdate, user=Depends(g
     updatable = [
         "name", "description", "flow_type", "supervisor_agent_id",
         "error_strategy", "agent_timeout_seconds", "workflow_timeout_seconds",
-        "max_retries",
+        "max_retries", "max_supervisor_rounds",
     ]
     for field in updatable:
         val = getattr(body, field, None)

@@ -38,6 +38,8 @@ async def list_agents(
             "description": a.description, "role": a.role,
             "agent_type": a.agent_type, "status": a.status,
             "resource_count": {"mcp": mcp_count, "kb": kb_count, "skills": skill_count},
+            "supervisor_prompt_template": a.supervisor_prompt_template,
+            "custom_prompt_override": a.custom_prompt_override,
             "created_at": a.created_at.isoformat() if a.created_at else None,
             "updated_at": a.updated_at.isoformat() if a.updated_at else None,
         })
@@ -63,6 +65,8 @@ async def get_agent(agent_id: int, user=Depends(get_current_user)):
         "a2a_config": a.a2a_config,
         "reasonix_config": a.reasonix_config, "system_prompt": a.system_prompt,
         "status": a.status, "knowledge_base_ids": a.knowledge_base_ids,
+        "supervisor_prompt_template": a.supervisor_prompt_template,
+        "custom_prompt_override": a.custom_prompt_override,
         "mcp_links": [{"id": ml.id, "mcp_server": {"id": ml.mcp_server.id, "name": ml.mcp_server.name}, "enabled_tools": ml.enabled_tools, "enabled": ml.enabled} for ml in mcp_links],
         "kb_links": [{"id": kl.id, "kb": {"id": kl.kb.id, "name": kl.kb.name}} for kl in kb_links],
         "skill_links": [{"id": sl.id, "skill": {"id": sl.skill.id, "name": sl.skill.name}} for sl in skill_links],
@@ -83,6 +87,10 @@ async def create_agent(body: AgentCreate, user=Depends(get_current_user)):
     if existing:
         return error(code=400, message="Agent 名称已存在")
 
+    # custom_prompt_override 仅管理员可设置
+    if body.custom_prompt_override and user.role != "admin":
+        return error(code=403, message="自定义 Prompt 覆盖仅管理员可设置")
+
     a = await Agent.create(
         name=body.name, display_name=body.display_name,
         description=body.description, role=body.role,
@@ -94,6 +102,8 @@ async def create_agent(body: AgentCreate, user=Depends(get_current_user)):
         reasonix_config=body.reasonix_config,
         system_prompt=body.system_prompt,
         knowledge_base_ids=body.kb_ids,
+        supervisor_prompt_template=body.supervisor_prompt_template,
+        custom_prompt_override=body.custom_prompt_override,
         created_by=user,
     )
 
@@ -123,7 +133,8 @@ async def update_agent(agent_id: int, body: AgentUpdate, user=Depends(get_curren
 
     updatable = ["display_name", "description", "role", "agent_type",
                  "llm_config_id", "llm_config", "http_config", "claudecode_config",
-                 "a2a_config", "reasonix_config", "system_prompt", "status"]
+                 "a2a_config", "reasonix_config", "system_prompt", "status",
+                 "supervisor_prompt_template"]
     for field in updatable:
         val = getattr(body, field, None)
         if val is not None:
@@ -133,6 +144,12 @@ async def update_agent(agent_id: int, body: AgentUpdate, user=Depends(get_curren
                 if len(sj) > 100000:
                     return error(code=400, message="settings_json 内容过长，最大支持 100KB")
             setattr(a, field, val)
+
+    # custom_prompt_override 仅管理员可设置
+    if body.custom_prompt_override is not None:
+        if user.role != "admin":
+            return error(code=403, message="自定义 Prompt 覆盖仅管理员可设置")
+        a.custom_prompt_override = body.custom_prompt_override
 
     if body.kb_ids is not None:
         a.knowledge_base_ids = body.kb_ids
@@ -274,7 +291,10 @@ async def copy_agent(agent_id: int, user=Depends(get_current_user)):
         a2a_config=a.a2a_config,
         reasonix_config=a.reasonix_config,
         system_prompt=a.system_prompt,
-        knowledge_base_ids=a.knowledge_base_ids, created_by=user,
+        knowledge_base_ids=a.knowledge_base_ids,
+        supervisor_prompt_template=a.supervisor_prompt_template,
+        custom_prompt_override=a.custom_prompt_override,
+        created_by=user,
     )
 
     mcp_links = await AgentMcpLink.filter(agent_id=agent_id)

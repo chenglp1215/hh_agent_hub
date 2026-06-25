@@ -49,6 +49,32 @@
           </a-col>
         </a-row>
 
+        <!-- Supervisor Config -->
+        <template v-if="form.role === 'supervisor'">
+          <h3 class="text-lg font-semibold mb-4 mt-4 text-[#00d4ff]">Supervisor 配置</h3>
+          <a-row :gutter="16">
+            <a-col :span="12">
+              <a-form-item label="行为模式">
+                <a-select v-model:value="supervisorPromptTemplate">
+                  <a-select-option value="free_route">自由路由型</a-select-option>
+                  <a-select-option value="strict_flow">流程遵从型</a-select-option>
+                  <a-select-option value="quick_qa">快速问答型</a-select-option>
+                  <a-select-option value="iterative">迭代优化型</a-select-option>
+                </a-select>
+                <div class="text-xs text-[#535b6e] mt-1">
+                  Supervisor 的调度行为模式，跟着 Agent 走
+                </div>
+              </a-form-item>
+            </a-col>
+          </a-row>
+          <a-form-item label="自定义 Prompt 覆盖" v-if="userStore.isAdmin">
+            <a-textarea v-model:value="customPromptOverride" :rows="4" placeholder="留空则使用上方选择的默认模板..." />
+            <div class="text-xs text-[#535b6e] mt-1">
+              自定义 Prompt 将覆盖默认模板，仅管理员可设置
+            </div>
+          </a-form-item>
+        </template>
+
         <a-form-item label="描述">
           <a-textarea v-model:value="form.description" :rows="2" />
         </a-form-item>
@@ -237,6 +263,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { agentsApi } from '@/api/agents'
+import { useUserStore } from '@/stores/user'
 import { projectsApi } from '@/api/projects'
 import { claudeSettingsApi } from '@/api/claudeSettings'
 import McpServerSelector from '@/components/McpServerSelector.vue'
@@ -260,6 +287,9 @@ const form = ref<any>({
   status: 'active',
   system_prompt: '',
 })
+const userStore = useUserStore()
+const supervisorPromptTemplate = ref('free_route')
+const customPromptOverride = ref('')
 const llmConfig = ref<any>({
   provider: 'openai',
   model: 'gpt-4o-mini',
@@ -350,6 +380,8 @@ async function loadAgent() {
       status: d.status,
       system_prompt: d.system_prompt || '',
     }
+    supervisorPromptTemplate.value = d.supervisor_prompt_template || 'free_route'
+    customPromptOverride.value = d.custom_prompt_override || ''
     if (d.llm_config_id) {
       llmMode.value = 'select'
       llmConfigId.value = d.llm_config_id
@@ -447,6 +479,8 @@ function buildFormData() {
   }))
   data.kb_ids = selectedKbIds.value
   data.skill_ids = selectedSkillIds.value
+  data.supervisor_prompt_template = supervisorPromptTemplate.value
+  data.custom_prompt_override = customPromptOverride.value || null
   return data
 }
 

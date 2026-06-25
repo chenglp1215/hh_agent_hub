@@ -234,11 +234,13 @@
           </a-form-item>
         </template>
 
-        <!-- System Prompt -->
+        <!-- System Prompt (hidden for supervisor - uses prompt template instead) -->
+        <template v-if="form.role !== 'supervisor'">
         <h3 class="text-lg font-semibold mb-4 mt-4 text-[#00d4ff]">System Prompt</h3>
         <a-form-item>
           <a-textarea v-model:value="form.system_prompt" :rows="6" placeholder="你是..." />
         </a-form-item>
+        </template>
 
         <!-- Resource Selection -->
         <h3 class="text-lg font-semibold mb-4 mt-4 text-[#00d4ff]">资源目录选择</h3>

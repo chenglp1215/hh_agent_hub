@@ -2,7 +2,6 @@ import re
 from typing import TypedDict, List, Any, Dict, Optional
 from langgraph.graph import StateGraph, END
 from loguru import logger
-from core.prompt_templates import render_prompt
 
 
 class AgentState(TypedDict):
@@ -136,28 +135,6 @@ class WorkflowEngine:
                         "intermediate_results": intermediate,
                         "trace": trace,
                     }
-
-            # 获取 Supervisor Prompt 配置并渲染模板
-            agent_configs_safe = agent_configs or {}
-            supervisor_config = agent_configs_safe.get("__supervisor__", {})
-            worker_names_list = [n for n in config.get("worker_agent_ids", []) if isinstance(n, str) and n in agent_nodes]
-
-            # 构建模板变量
-            variables = {
-                "worker_list": ", ".join(worker_names_list),
-                "worker_descriptions": "\n".join(
-                    f"- {name}: {agent_configs_safe.get(name, {}).get('description', '无描述')[:200]}"
-                    for name in worker_names_list
-                ),
-                "max_iterations": max_supervisor_rounds
-            }
-
-            # 渲染 Prompt
-            system_prompt = render_prompt(
-                template_slug=supervisor_config.get("supervisor_prompt_template", "free_route"),
-                variables=variables,
-                custom_override=supervisor_config.get("custom_prompt_override")
-            )
 
             # 将前一轮 worker 的结果注入 messages，让 supervisor 感知到子代理已完成任务
             state_with_context = dict(state)

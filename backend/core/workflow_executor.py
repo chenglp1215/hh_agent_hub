@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
+from core.prompt_templates import render_prompt
 
 from models.app import App
 from models.workflow import Workflow
@@ -117,6 +118,24 @@ async def build_workflow(session: Session, message: str) -> tuple:
                 "_available_workers": agent_names,
                 "_worker_descriptions": worker_descriptions,
             }
+
+            # Render supervisor prompt template as system_prompt
+            # (overrides DB system_prompt for supervisor agents)
+            _variables = {
+                "worker_list": ", ".join(agent_names),
+                "worker_descriptions": "\n".join(
+                    f"- {n}: {worker_descriptions.get(n, '无描述')[:200]}"
+                    for n in agent_names
+                ),
+                "max_iterations": 5,
+            }
+            _rendered = render_prompt(
+                template_slug=sup_agent.supervisor_prompt_template or "free_route",
+                variables=_variables,
+                custom_override=sup_agent.custom_prompt_override,
+            )
+            sup_config["system_prompt"] = _rendered
+
             sup_node_fn = await agent_factory.create(sup_config)
             agent_nodes[sup_agent.name] = sup_node_fn
 

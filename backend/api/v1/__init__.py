@@ -28,6 +28,9 @@ router.include_router(projects_router)
 from api.v1.claude_settings import router as claude_settings_router
 router.include_router(claude_settings_router)
 
+from api.v1.reasonix_settings import router as reasonix_settings_router
+router.include_router(reasonix_settings_router)
+
 
 from api.v1.knowledge_bases import router as kb_router
 router.include_router(kb_router)

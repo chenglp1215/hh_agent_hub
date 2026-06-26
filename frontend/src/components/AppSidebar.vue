@@ -78,6 +78,7 @@
         <a-menu-item key="/resources/skills">Skill 管理</a-menu-item>
         <a-menu-item key="/projects">项目管理</a-menu-item>
         <a-menu-item key="/claude-settings">Claude Settings</a-menu-item>
+        <a-menu-item key="/reasonix-settings">Reasonix 配置</a-menu-item>
       </a-sub-menu>
 
       <a-sub-menu key="monitor" class="menu-sub">

@@ -208,6 +208,20 @@
         <template v-if="form.agent_type === 'reasonix'">
           <h3 class="text-lg font-semibold mb-4 mt-4 text-[#00d4ff]">Reasonix 配置 (DeepSeek)</h3>
 
+          <a-form-item label="选择配置">
+            <a-select
+              v-model:value="rxConfig.settings_registry_id"
+              placeholder="选择 Reasonix 配置..."
+              :options="reasonixSettingsOptions"
+              show-search
+              filter-option
+              allow-clear
+              :loading="loadingReasonixSettings"
+            />
+            <div class="text-xs text-[#535b6e] mt-1">
+              在 <router-link to="/reasonix-settings" class="text-[#5e6ad2]">Reasonix 配置管理</router-link> 中创建和管理配置
+            </div>
+          </a-form-item>
           <a-form-item label="关联项目">
             <a-select
               v-model:value="rxConfig.project_registry_id"
@@ -218,19 +232,6 @@
               allow-clear
               :loading="loadingProjects"
             />
-          </a-form-item>
-          <a-form-item label="DeepSeek API Key" required>
-            <a-input-password v-model:value="rxConfig.deepseek_api_key" placeholder="sk-..." />
-          </a-form-item>
-          <a-form-item label="模型">
-            <a-select v-model:value="rxConfig.deepseek_model">
-              <a-select-option value="deepseek-chat">deepseek-chat</a-select-option>
-              <a-select-option value="deepseek-coder">deepseek-coder</a-select-option>
-              <a-select-option value="deepseek-reasoner">deepseek-reasoner</a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item label="最大轮次">
-            <a-input-number v-model:value="rxConfig.max_turns" :min="1" :max="100" class="w-full" />
           </a-form-item>
         </template>
 
@@ -272,6 +273,7 @@ import McpServerSelector from '@/components/McpServerSelector.vue'
 import KnowledgeBaseSelector from '@/components/KnowledgeBaseSelector.vue'
 import SkillsSelector from '@/components/SkillsSelector.vue'
 import { llmConfigsApi } from '@/api/llmConfigs'
+import { reasonixSettingsApi } from '@/api/reasonixSettings'
 
 const props = defineProps<{ id?: string }>()
 
@@ -327,10 +329,8 @@ const ccConfig = ref<any>({
   settings_registry_id: undefined,
 })
 const rxConfig = ref<any>({
+  settings_registry_id: undefined,
   project_registry_id: undefined,
-  deepseek_api_key: '',
-  deepseek_model: 'deepseek-chat',
-  max_turns: 25,
 })
 
 const loadingProjects = ref(false)
@@ -361,6 +361,22 @@ async function loadSettingsOptions() {
     // ignore
   } finally {
     loadingSettings.value = false
+  }
+}
+
+const loadingReasonixSettings = ref(false)
+const reasonixSettingsOptions = ref<{ value: number; label: string }[]>([])
+
+async function loadReasonixSettingsOptions() {
+  loadingReasonixSettings.value = true
+  try {
+    const res = await reasonixSettingsApi.list()
+    const list = res.data.data || []
+    reasonixSettingsOptions.value = list.map((s: any) => ({ value: s.id, label: `${s.display_name || s.name} (${s.model})` }))
+  } catch {
+    // ignore
+  } finally {
+    loadingReasonixSettings.value = false
   }
 }
 const selectedMcpServers = ref<any[]>([])
@@ -412,10 +428,8 @@ async function loadAgent() {
     }
     if (d.reasonix_config) {
       rxConfig.value = {
+        settings_registry_id: d.reasonix_config.settings_registry_id || undefined,
         project_registry_id: d.reasonix_config.project_registry_id || undefined,
-        deepseek_api_key: d.reasonix_config.deepseek_api_key || '',
-        deepseek_model: d.reasonix_config.deepseek_model || 'deepseek-chat',
-        max_turns: d.reasonix_config.max_turns || 25,
       }
     }
     selectedMcpServers.value = (d.mcp_links || []).map((l: any) => ({
@@ -465,14 +479,12 @@ function buildFormData() {
     }
   }
   if (form.value.agent_type === 'reasonix') {
-    if (!rxConfig.value.deepseek_api_key?.trim()) {
-      throw new Error('请输入 DeepSeek API Key')
+    if (!rxConfig.value.settings_registry_id) {
+      throw new Error('请选择 Reasonix 配置')
     }
     data.reasonix_config = {
+      settings_registry_id: rxConfig.value.settings_registry_id || undefined,
       project_registry_id: rxConfig.value.project_registry_id || undefined,
-      deepseek_api_key: rxConfig.value.deepseek_api_key,
-      deepseek_model: rxConfig.value.deepseek_model || 'deepseek-chat',
-      max_turns: rxConfig.value.max_turns || 25,
     }
   }
   data.mcp_links = selectedMcpServers.value.map((item: any) => ({
@@ -513,6 +525,7 @@ onMounted(() => {
   loadLlmConfigOptions()
   loadProjectOptions()
   loadSettingsOptions()
+  loadReasonixSettingsOptions()
   if (isEdit.value) {
     loadAgent()
   }

@@ -51,6 +51,7 @@ MODELS = [
     "models.skill",
     "models.project_registry",
     "models.claude_settings",
+    "models.reasonix_settings",
     "models.chat_log",
     "models.workflow_trace",
     "models.trigger",

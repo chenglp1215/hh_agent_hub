@@ -143,9 +143,46 @@ class DockerReasonixRunner:
         self.agent_name = agent_name
         self.system_prompt = system_prompt
 
+    async def _resolve_settings(self) -> Dict[str, Any]:
+        """Merge settings_registry_id from DB with per-agent overrides."""
+        settings_id = self.config.get("settings_registry_id")
+        if not settings_id:
+            return self.config
+
+        from models.reasonix_settings import ReasonixSettingsRegistry
+        settings = await ReasonixSettingsRegistry.get_or_none(id=settings_id)
+        if not settings:
+            logger.warning(f"ReasonixSettingsRegistry id={settings_id} not found, using inline config")
+            return self.config
+
+        # DB settings as base, per-agent config overrides
+        merged = {
+            "api_key": settings.api_key,
+            "model": settings.model,
+            "temperature": settings.temperature,
+            "max_turns": settings.max_turns,
+            "reasoning_language": settings.reasoning_language,
+            "auto_plan": settings.auto_plan,
+            "compact_ratio": settings.compact_ratio,
+        }
+        if settings.extra_json and isinstance(settings.extra_json, dict):
+            merged.update(settings.extra_json)
+
+        # Per-agent overrides (only non-None values)
+        for key in ("api_key", "model", "temperature", "max_turns",
+                     "reasoning_language", "auto_plan", "compact_ratio",
+                     "project_registry_id", "timeout_minutes"):
+            val = self.config.get(key)
+            if val is not None:
+                merged[key] = val
+
+        return merged
+
     async def invoke(self, user_input: str, session_id: str,
                      context: Dict[str, Any] = None) -> str:
         context = context or {}
+
+        self.config = await self._resolve_settings()
 
         has_registry_ref = self.config.get("project_registry_id")
 

@@ -52,6 +52,10 @@ const router = createRouter({
         { path: 'claude-settings', name: 'ClaudeSettingsList', component: () => import('@/views/ClaudeSettingsList.vue'), meta: { title: 'Claude Settings' } },
         { path: 'claude-settings/create', name: 'ClaudeSettingsCreate', component: () => import('@/views/ClaudeSettingsEditor.vue'), meta: { title: '新建 Claude Settings' } },
         { path: 'claude-settings/:id/edit', name: 'ClaudeSettingsEdit', component: () => import('@/views/ClaudeSettingsEditor.vue'), meta: { title: '编辑 Claude Settings' }, props: true },
+        // Reasonix Settings
+        { path: 'reasonix-settings', name: 'ReasonixSettingsList', component: () => import('@/views/ReasonixSettingsList.vue'), meta: { title: 'Reasonix 配置' } },
+        { path: 'reasonix-settings/create', name: 'ReasonixSettingsCreate', component: () => import('@/views/ReasonixSettingsEditor.vue'), meta: { title: '新建 Reasonix 配置' } },
+        { path: 'reasonix-settings/:id/edit', name: 'ReasonixSettingsEdit', component: () => import('@/views/ReasonixSettingsEditor.vue'), meta: { title: '编辑 Reasonix 配置' }, props: true },
         // Monitoring
         { path: 'monitor/traces', name: 'ExecutionTraceList', component: () => import('@/views/ExecutionTraceList.vue'), meta: { title: '执行追踪' } },
         { path: 'monitor/traces/:executionId', name: 'ExecutionTraceDetail', component: () => import('@/views/ExecutionTrace.vue'), meta: { title: '追踪详情' }, props: true },

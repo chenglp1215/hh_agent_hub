@@ -22,7 +22,7 @@ def _toml_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
 
 
-def _build_reasonix_toml(config: Dict[str, Any], api_key_env: str = "REASONIX_API_KEY") -> str:
+def _build_reasonix_toml(config: Dict[str, Any], api_key_env: str = "DEEPSEEK_API_KEY") -> str:
     """Generate a complete reasonix.toml from agent config.
 
     Supports both new config keys (api_key, model) and legacy keys (deepseek_api_key, deepseek_model).
@@ -299,7 +299,7 @@ class DockerReasonixRunner:
             "docker", "run", "--rm", "-i",
             "--network", self.NETWORK,
             "--user", "1001:1001",
-            "-e", f"REASONIX_API_KEY={api_key}",
+            "-e", f"DEEPSEEK_API_KEY={api_key}",
         ]
 
         base_url = self.config.get("base_url")

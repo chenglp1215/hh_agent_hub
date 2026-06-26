@@ -356,7 +356,7 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
                 from models.workflow_trace import WorkflowTrace
                 await WorkflowTrace.create(
                     execution_id=task_id,
-                    workflow_id=workflow.id if workflow else None,
+                    workflow_id=app.workflow_id,
                     app_id=app_id,
                     status="success",
                     agent_count=len(agent_names),

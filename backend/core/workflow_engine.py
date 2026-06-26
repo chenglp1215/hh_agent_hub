@@ -208,6 +208,10 @@ class WorkflowEngine:
                 if cleaned:
                     intermediate[supervisor_name] = cleaned
 
+                # 路由到 end 时，cleaned 内容就是最终回复
+                if next_agent == "end" and cleaned:
+                    result["final_answer"] = cleaned
+
                 # 将 supervisor 的任务描述作为 worker 的输入（主管安排的独立任务）
                 if next_agent != "end" and cleaned:
                     out_msgs = list(result.get("messages") or state.get("messages") or [])

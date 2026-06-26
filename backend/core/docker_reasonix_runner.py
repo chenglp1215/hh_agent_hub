@@ -394,7 +394,7 @@ class DockerReasonixRunner:
                 return f"Error: Reasonix container failed (exit {docker_proc.returncode}): {stderr_text[:500]}"
 
             output = stdout.decode("utf-8", errors="replace")
-            _final_output = output.strip() if output.strip() else "Execution completed (no output)"
+            _final_output = self._clean_output(output)
 
             _elapsed = int((time_mod.time() - _t0) * 1000)
             if _trace_id:
@@ -459,6 +459,28 @@ class DockerReasonixRunner:
                     logger.debug(f"Preserved reasonix.toml for debugging: {_dest}")
                 except Exception:
                     pass
+
+    # ------------------------------------------------------------------
+    # Output cleaner — 去掉 XML 工具调用标签，只保留可读文本
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _clean_output(raw: str) -> str:
+        import re as _re
+        if not raw or not raw.strip():
+            return "Execution completed (no output)"
+        # 去掉 <invoke name="...">...</invoke> 整块
+        s = _re.sub(r'<invoke\b[^>]*>.*?</invoke>', '', raw, flags=_re.DOTALL)
+        # 去掉残留的 <parameter ...>...</parameter>
+        s = _re.sub(r'<parameter\b[^>]*>.*?</parameter>', '', s, flags=_re.DOTALL)
+        # 去掉单独的 </invoke> 或 <invoke ... />
+        s = _re.sub(r'</?invoke\b[^>]*/?>', '', s)
+        # 去掉 reasonix 尾部统计行 "— turns:1 cache:xx% cost:$xxx"
+        s = _re.sub(r'^—\s*turns:.*$', '', s, flags=_re.MULTILINE)
+        # 合并连续空行
+        s = _re.sub(r'\n{3,}', '\n\n', s)
+        result = s.strip()
+        return result if result else "Execution completed (no output)"
 
     # ------------------------------------------------------------------
     # Project instructions writer

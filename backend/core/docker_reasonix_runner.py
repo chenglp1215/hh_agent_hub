@@ -326,7 +326,6 @@ class DockerReasonixRunner:
         cmd = [
             "docker", "run", "--rm", "-i",
             "--network", self.NETWORK,
-            "--user", "1001:1001",
             "-e", f"DEEPSEEK_API_KEY={api_key}",
         ]
 
@@ -339,6 +338,7 @@ class DockerReasonixRunner:
             "-w", "/workspace",
             "--memory", "512m",
             "--cpus", "1.0",
+            "-e", "HOME=/workspace",
             self.IMAGE,
             "sh", "-c", inner_cmd,
         ])

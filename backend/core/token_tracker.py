@@ -1,4 +1,4 @@
-"""Token 消耗追踪器 — 按 task_id 聚合 LLM token 使用量"""
+"""Token 消耗追踪器 — 按 task_id 聚合 LLM token 使用量，支持按模型分别统计"""
 
 from dataclasses import dataclass, field
 from typing import Dict, Optional
@@ -10,6 +10,7 @@ class TokenUsage:
     completion_tokens: int = 0
     total_tokens: int = 0
     model_name: Optional[str] = None
+    by_model: Dict[str, dict] = field(default_factory=dict)
 
 
 # 全局按 task_id 累积
@@ -19,7 +20,7 @@ _token_usage: Dict[str, TokenUsage] = {}
 def record_token_usage(task_id: str, prompt_tokens: int = 0,
                        completion_tokens: int = 0, total_tokens: int = 0,
                        model_name: Optional[str] = None):
-    """记录一次 LLM 调用的 token 使用量"""
+    """记录一次 LLM 调用的 token 使用量，按模型分别累积"""
     if not task_id:
         return
     usage = _token_usage.get(task_id)
@@ -31,6 +32,11 @@ def record_token_usage(task_id: str, prompt_tokens: int = 0,
     usage.total_tokens += total_tokens
     if model_name:
         usage.model_name = model_name
+        if model_name not in usage.by_model:
+            usage.by_model[model_name] = {"prompt": 0, "completion": 0, "total": 0}
+        usage.by_model[model_name]["prompt"] += prompt_tokens
+        usage.by_model[model_name]["completion"] += completion_tokens
+        usage.by_model[model_name]["total"] += total_tokens
 
 
 def get_token_usage(task_id: str) -> TokenUsage:

@@ -249,6 +249,7 @@ CREATE TABLE IF NOT EXISTS "chat_logs" (
     "completion_tokens" INT NOT NULL DEFAULT 0,
     "total_tokens" INT NOT NULL DEFAULT 0,
     "model_name" VARCHAR(100),
+    "token_by_model" JSON,
     "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "app_id" INT REFERENCES "apps" ("id") ON DELETE SET NULL,
     "session_id" VARCHAR(36) REFERENCES "sessions" ("id") ON DELETE SET NULL

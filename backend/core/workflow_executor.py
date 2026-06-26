@@ -493,6 +493,21 @@ async def _save_chat_log(app, session, task_id: str, user_input: str,
         from core.token_tracker import get_token_usage
         token_usage = get_token_usage(task_id)
 
+        def _merge_by_model(existing_dict: dict, new_dict: dict) -> dict:
+            """合并两个 by_model 字典，累加相同模型的 token"""
+            if not existing_dict:
+                return dict(new_dict)
+            if not new_dict:
+                return dict(existing_dict)
+            merged = dict(existing_dict)
+            for model, usage in new_dict.items():
+                if model not in merged:
+                    merged[model] = {"prompt": 0, "completion": 0, "total": 0}
+                merged[model]["prompt"] += usage.get("prompt", 0)
+                merged[model]["completion"] += usage.get("completion", 0)
+                merged[model]["total"] += usage.get("total", 0)
+            return merged
+
         existing = await ChatLog.get_or_none(session=session)
         if existing:
             existing.user_input = (existing.user_input or "") + "\n---\n" + user_input
@@ -507,6 +522,9 @@ async def _save_chat_log(app, session, task_id: str, user_input: str,
             existing.total_tokens = (existing.total_tokens or 0) + token_usage.total_tokens
             if token_usage.model_name:
                 existing.model_name = token_usage.model_name
+            existing.token_by_model = _merge_by_model(
+                existing.token_by_model, token_usage.by_model
+            )
             await existing.save()
         else:
             await ChatLog.create(
@@ -524,6 +542,7 @@ async def _save_chat_log(app, session, task_id: str, user_input: str,
                 completion_tokens=token_usage.completion_tokens,
                 total_tokens=token_usage.total_tokens,
                 model_name=token_usage.model_name,
+                token_by_model=token_usage.by_model if token_usage.by_model else None,
             )
     except Exception as e:
         logger.warning(f"Failed to save ChatLog: {e}")

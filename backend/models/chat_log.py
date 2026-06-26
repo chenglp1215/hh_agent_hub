@@ -22,6 +22,7 @@ class ChatLog(Model):
     completion_tokens = fields.IntField(default=0)
     total_tokens = fields.IntField(default=0)
     model_name = fields.CharField(max_length=100, null=True)
+    token_by_model = fields.JSONField(null=True)  # {model_name: {prompt, completion, total}}
     created_at = fields.DatetimeField(auto_now_add=True, index=True)
 
     class Meta:

@@ -83,15 +83,23 @@ async def get_dashboard_stats(user=Depends(get_current_user)):
     today_prompt_tokens = sum(t.prompt_tokens or 0 for t in today_logs)
     today_completion_tokens = sum(t.completion_tokens or 0 for t in today_logs)
 
-    # 按模型分组统计
+    # 按模型分组统计（优先使用 token_by_model JSON 字段，兼容旧 model_name 字段）
     token_by_model: dict = {}
     for t in today_logs:
-        model = t.model_name or "unknown"
-        if model not in token_by_model:
-            token_by_model[model] = {"prompt": 0, "completion": 0, "total": 0}
-        token_by_model[model]["prompt"] += t.prompt_tokens or 0
-        token_by_model[model]["completion"] += t.completion_tokens or 0
-        token_by_model[model]["total"] += t.total_tokens or 0
+        if t.token_by_model:
+            for model, usage in t.token_by_model.items():
+                if model not in token_by_model:
+                    token_by_model[model] = {"prompt": 0, "completion": 0, "total": 0}
+                token_by_model[model]["prompt"] += usage.get("prompt", 0)
+                token_by_model[model]["completion"] += usage.get("completion", 0)
+                token_by_model[model]["total"] += usage.get("total", 0)
+        else:
+            model = t.model_name or "unknown"
+            if model not in token_by_model:
+                token_by_model[model] = {"prompt": 0, "completion": 0, "total": 0}
+            token_by_model[model]["prompt"] += t.prompt_tokens or 0
+            token_by_model[model]["completion"] += t.completion_tokens or 0
+            token_by_model[model]["total"] += t.total_tokens or 0
 
     # Recent chat logs (last 10)
     recent_logs = await ChatLog.all().order_by('-created_at').limit(10)

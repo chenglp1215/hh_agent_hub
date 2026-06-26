@@ -12,7 +12,7 @@ class ReasonixSettingsCreate(BaseModel):
     temperature: float = 0.0
     max_turns: int = 25
     reasoning_language: str = "zh"
-    auto_plan: str = "off"
+    auto_plan: str = "on"
     compact_ratio: float = 0.8
     extra_json: Optional[Dict[str, Any]] = None
 

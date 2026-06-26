@@ -69,14 +69,6 @@
             </a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item label="自动规划">
-              <a-select v-model:value="form.auto_plan">
-                <a-select-option value="off">关闭</a-select-option>
-                <a-select-option value="on">开启</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
             <a-form-item label="压缩阈值">
               <a-input-number v-model:value="form.compact_ratio" :min="0.3" :max="0.95" :step="0.05" class="w-full" />
               <div class="text-xs text-[#535b6e] mt-1">上下文达到此比例时触发压缩</div>
@@ -133,7 +125,6 @@ const form = ref<any>({
   temperature: 0.0,
   max_turns: 25,
   reasoning_language: 'zh',
-  auto_plan: 'off',
   compact_ratio: 0.8,
 })
 
@@ -173,7 +164,6 @@ onMounted(async () => {
         temperature: d.temperature ?? 0.0,
         max_turns: d.max_turns ?? 25,
         reasoning_language: d.reasoning_language || 'zh',
-        auto_plan: d.auto_plan || 'off',
         compact_ratio: d.compact_ratio ?? 0.8,
       }
       if (d.extra_json) {

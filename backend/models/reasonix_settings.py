@@ -12,7 +12,7 @@ class ReasonixSettingsRegistry(Model):
     temperature = fields.FloatField(default=0.0)
     max_turns = fields.IntField(default=25)
     reasoning_language = fields.CharField(max_length=10, default="zh")
-    auto_plan = fields.CharField(max_length=10, default="off")
+    auto_plan = fields.CharField(max_length=10, default="on")
     compact_ratio = fields.FloatField(default=0.8)
     extra_json = fields.JSONField(null=True)
     status = fields.CharField(max_length=20, default="active")

@@ -326,13 +326,7 @@ class DockerReasonixRunner:
 
         host_workspace = self._to_host_path(workspace_dir)
 
-        inner_cmd = (
-            f'reasonix run -m {shlex.quote(model)}'
-            f' --system "你是一个代码分析助手。你可以使用 Bash 命令探索文件系统、读取文件、搜索代码。'
-            f'需要执行命令时，用 \`\`\`CMD\\n命令内容\\n\`\`\` 格式输出。'
-            f'命令会实际执行并返回结果给你。不要模拟，必须实际执行。"'
-            f' "$(cat)"'
-        )
+        inner_cmd = f'reasonix run -m {shlex.quote(model)} "$(cat)"'
 
         cmd = [
             "docker", "run", "--rm", "-i",
@@ -379,8 +373,10 @@ class DockerReasonixRunner:
         MAX_TOOL_ROUNDS = 6
         current_input = user_input
         all_outputs: List[str] = []
-        # 匹配 ```bash ... ``` / ```tool ... ``` / ```sh ... ``` / ```CMD ... ``` 代码块
-        _cmd_pattern = _re.compile(r'```(?:bash|tool|sh|CMD)\s*\n(.*?)\n```', _re.DOTALL)
+        # 匹配 Reasonix 原生 tool call 格式
+        _bash_xml = _re.compile(r'<bash\s+arguments\s*=\s*"([^"]*)"\s*/>', _re.IGNORECASE)
+        # 兼容旧的 markdown 代码块格式 ```bash / ```sh / ```CMD / ```tool
+        _cmd_block = _re.compile(r'```(?:bash|tool|sh|CMD)\s*\n(.*?)\n```', _re.DOTALL)
         # 匹配 ```output ... ``` 块（reasonix 有时会生成假 output）
         _fake_output = _re.compile(r'```output.*?\n.*?\n```', _re.DOTALL)
 
@@ -429,8 +425,10 @@ class DockerReasonixRunner:
                 raw_output = await _run_reasonix_once(current_input, round_timeout)
                 all_outputs.append(raw_output)
 
-                # 找 bash/shell 命令
-                cmd_matches = _cmd_pattern.findall(raw_output)
+                # 解析工具调用: Reasonix 原生 <bash arguments="..." /> + markdown 代码块
+                cmd_matches = _bash_xml.findall(raw_output)
+                if not cmd_matches:
+                    cmd_matches = _cmd_block.findall(raw_output)
                 if not cmd_matches:
                     logger.info(f"Reasonix: no tool commands found in round {round_num + 1}, done.")
                     break

@@ -195,7 +195,7 @@ class WorkflowEngine:
                 if cleaned:
                     intermediate[supervisor_name] = cleaned
 
-                # 将 supervisor 的任务描述注入 messages，让 worker 感知到任务上下文
+                # 将 supervisor 的任务描述作为 worker 的输入（主管安排的独立任务）
                 if next_agent != "end" and cleaned:
                     out_msgs = list(result.get("messages") or state.get("messages") or [])
                     out_msgs.append({"role": "user", "content": cleaned})

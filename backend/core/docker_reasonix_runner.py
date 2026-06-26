@@ -326,7 +326,13 @@ class DockerReasonixRunner:
 
         host_workspace = self._to_host_path(workspace_dir)
 
-        inner_cmd = f'reasonix run -m {shlex.quote(model)} "$(cat)"'
+        inner_cmd = (
+            f'reasonix run -m {shlex.quote(model)}'
+            f' --system "你是一个代码分析助手。你可以使用 Bash 命令探索文件系统、读取文件、搜索代码。'
+            f'需要执行命令时，用 \`\`\`CMD\\n命令内容\\n\`\`\` 格式输出。'
+            f'命令会实际执行并返回结果给你。不要模拟，必须实际执行。"'
+            f' "$(cat)"'
+        )
 
         cmd = [
             "docker", "run", "--rm", "-i",
@@ -373,8 +379,8 @@ class DockerReasonixRunner:
         MAX_TOOL_ROUNDS = 6
         current_input = user_input
         all_outputs: List[str] = []
-        # 匹配 ```bash ... ``` / ```tool ... ``` / ```sh ... ``` 代码块
-        _cmd_pattern = _re.compile(r'```(?:bash|tool|sh)\s*\n(.*?)\n```', _re.DOTALL)
+        # 匹配 ```bash ... ``` / ```tool ... ``` / ```sh ... ``` / ```CMD ... ``` 代码块
+        _cmd_pattern = _re.compile(r'```(?:bash|tool|sh|CMD)\s*\n(.*?)\n```', _re.DOTALL)
         # 匹配 ```output ... ``` 块（reasonix 有时会生成假 output）
         _fake_output = _re.compile(r'```output.*?\n.*?\n```', _re.DOTALL)
 

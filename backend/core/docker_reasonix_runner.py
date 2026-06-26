@@ -303,7 +303,12 @@ class DockerReasonixRunner:
                           timeout_seconds: int,
                           trace_id: str = None,
                           parent_span_id: str = None) -> str:
-        """Execute reasonix CLI inside a disposable Docker container."""
+        """Execute reasonix CLI with tool execution loop.
+
+        reasonix run 在 Docker 内不实际执行 bash 工具（模型只输出文本）。
+        本方法解析工具调用，在 Python 层执行后把结果喂回下一轮。
+        """
+        import re as _re
 
         # Validate model
         if model not in SUPPORTED_DEEPSEEK_MODELS:
@@ -354,7 +359,6 @@ class DockerReasonixRunner:
                 _instructions = _f.read()
         except (FileNotFoundError, IOError):
             pass
-        # TOML content as part of system_prompt
         _system_prompt = (
             f"[reasonix.toml]\n{toml_content}\n\n"
             f"[INSTRUCTIONS.md]\n{_instructions}"
@@ -363,40 +367,94 @@ class DockerReasonixRunner:
         _span_id = agent_call_logger.start_span(parent_span_id) if _trace_id else ""
         _t0 = time_mod.time()
 
-        try:
-            # stdin 管道方式 — 与 claudecode echo "input" | claude --print -p - 一致
-            shell_cmd = f'{shlex.join(["echo", "-n", user_input])} | {shlex.join(cmd)}'
-            docker_proc = await asyncio.create_subprocess_shell(
+        # ----- 多轮工具执行循环 -----
+        # reasonix run 在 Docker 内只输出工具调用文本不实际执行
+        # 本循环解析工具调用 -> 在 workspace 执行 -> 结果喂回下一轮
+        MAX_TOOL_ROUNDS = 6
+        current_input = user_input
+        all_outputs: List[str] = []
+        # 匹配 ```bash ... ``` / ```tool ... ``` / ```sh ... ``` 代码块
+        _cmd_pattern = _re.compile(r'```(?:bash|tool|sh)\s*\n(.*?)\n```', _re.DOTALL)
+        # 匹配 ```output ... ``` 块（reasonix 有时会生成假 output）
+        _fake_output = _re.compile(r'```output.*?\n.*?\n```', _re.DOTALL)
+
+        async def _run_reasonix_once(prompt: str, round_timeout: int) -> str:
+            shell_cmd = f'{shlex.join(["echo", "-n", prompt])} | {shlex.join(cmd)}'
+            proc = await asyncio.create_subprocess_shell(
                 shell_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-
             stdout, stderr = await asyncio.wait_for(
-                docker_proc.communicate(),
-                timeout=timeout_seconds,
+                proc.communicate(), timeout=round_timeout,
             )
-
             stderr_text = stderr.decode("utf-8", errors="replace")
             if stderr_text.strip():
-                logger.debug(f"Docker stderr: {stderr_text[:500]}")
+                logger.debug(f"Docker stderr (round): {stderr_text[:300]}")
+            if proc.returncode != 0:
+                raise RuntimeError(f"Docker exit {proc.returncode}: {stderr_text[:300]}")
+            return stdout.decode("utf-8", errors="replace")
 
-            if docker_proc.returncode != 0:
-                _elapsed = int((time_mod.time() - _t0) * 1000)
-                if _trace_id:
-                    agent_call_logger.log_agent_call(
-                        trace_id=_trace_id, parent_span_id=parent_span_id,
-                        span_id=_span_id, agent_name=self.agent_name,
-                        agent_type="reasonix", system_prompt=_system_prompt,
-                        user_input=user_input, output=stderr_text[:500],
-                        duration_ms=_elapsed,
-                        metadata={"error": True, "mode": "docker", "exit_code": docker_proc.returncode},
-                    )
-                logger.error(f"Docker container exited with code {docker_proc.returncode}: {stderr_text[:500]}")
-                return f"Error: Reasonix container failed (exit {docker_proc.returncode}): {stderr_text[:500]}"
+        async def _exec_tool(cmd_text: str) -> str:
+            """在 workspace 中执行 bash 命令"""
+            cmd_text = cmd_text.strip()
+            try:
+                proc = await asyncio.create_subprocess_shell(
+                    cmd_text, cwd=workspace_dir,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
+                out = stdout.decode("utf-8", errors="replace")[:8000]
+                if stderr:
+                    out += "\n[stderr]\n" + stderr.decode("utf-8", errors="replace")[:2000]
+                return out.strip() or "(no output)"
+            except asyncio.TimeoutError:
+                return "(timeout after 60s)"
+            except Exception as e:
+                return f"(error: {e})"
 
-            output = stdout.decode("utf-8", errors="replace")
-            _final_output = self._clean_output(output)
+        try:
+            for round_num in range(MAX_TOOL_ROUNDS):
+                round_timeout = max(timeout_seconds // MAX_TOOL_ROUNDS, 60)
+                logger.info(f"Reasonix tool-loop round {round_num + 1}/{MAX_TOOL_ROUNDS}, "
+                           f"input_len={len(current_input)}")
+
+                raw_output = await _run_reasonix_once(current_input, round_timeout)
+                all_outputs.append(raw_output)
+
+                # 找 bash/shell 命令
+                cmd_matches = _cmd_pattern.findall(raw_output)
+                if not cmd_matches:
+                    logger.info(f"Reasonix: no tool commands found in round {round_num + 1}, done.")
+                    break
+
+                # 执行工具并收集结果
+                tool_results = []
+                for i, cmd_text in enumerate(cmd_matches):
+                    # 跳过明显是假输出的块
+                    if _fake_output.match(raw_output):
+                        continue
+                    logger.info(f"Reasonix: executing tool [{i + 1}]: {cmd_text[:100]}")
+                    result = await _exec_tool(cmd_text)
+                    tool_results.append(f"Command: {cmd_text}\nResult:\n{result}")
+
+                if not tool_results:
+                    break
+
+                # 构建下一轮输入：原始任务 + 工具结果
+                results_text = "\n\n".join(tool_results)
+                current_input = (
+                    f"Original task: {user_input}\n\n"
+                    f"You previously output commands. Here are the EXECUTION RESULTS:\n\n"
+                    f"{results_text}\n\n"
+                    f"Based on these results, provide your FINAL answer. "
+                    f"Do NOT output more commands — just give the answer."
+                )
+
+            # 取最后一轮输出作为最终结果
+            _final_raw = all_outputs[-1] if all_outputs else ""
+            _final_output = self._clean_output(_final_raw)
 
             _elapsed = int((time_mod.time() - _t0) * 1000)
             if _trace_id:
@@ -406,47 +464,20 @@ class DockerReasonixRunner:
                     agent_type="reasonix", system_prompt=_system_prompt,
                     user_input=user_input, output=_final_output,
                     duration_ms=_elapsed,
-                    metadata={"mode": "docker"},
+                    metadata={"mode": "docker", "tool_rounds": len(all_outputs)},
                 )
             return _final_output
 
         except asyncio.TimeoutError:
             _elapsed = int((time_mod.time() - _t0) * 1000)
-            if _trace_id:
-                agent_call_logger.log_agent_call(
-                    trace_id=_trace_id, parent_span_id=parent_span_id,
-                    span_id=_span_id, agent_name=self.agent_name,
-                    agent_type="reasonix", system_prompt=_system_prompt,
-                    user_input=user_input, output="",
-                    duration_ms=_elapsed,
-                    metadata={"error": True, "mode": "docker", "timeout": True, "timeout_seconds": timeout_seconds},
-                )
             logger.error(f"Docker Reasonix timed out after {timeout_seconds}s")
             return f"Error: Reasonix execution timed out after {timeout_seconds} seconds"
-        except FileNotFoundError:
+        except RuntimeError as e:
             _elapsed = int((time_mod.time() - _t0) * 1000)
-            if _trace_id:
-                agent_call_logger.log_agent_call(
-                    trace_id=_trace_id, parent_span_id=parent_span_id,
-                    span_id=_span_id, agent_name=self.agent_name,
-                    agent_type="reasonix", system_prompt=_system_prompt,
-                    user_input=user_input, output="",
-                    duration_ms=_elapsed,
-                    metadata={"error": True, "mode": "docker", "detail": "Docker not found"},
-                )
-            logger.error("Docker not found. Ensure Docker is installed and in PATH.")
-            return "Error: Docker not available - cannot execute Reasonix agent"
+            logger.error(f"Docker Reasonix error: {e}")
+            return f"Error: Reasonix container failed: {e}"
         except Exception as e:
             _elapsed = int((time_mod.time() - _t0) * 1000)
-            if _trace_id:
-                agent_call_logger.log_agent_call(
-                    trace_id=_trace_id, parent_span_id=parent_span_id,
-                    span_id=_span_id, agent_name=self.agent_name,
-                    agent_type="reasonix", system_prompt=_system_prompt,
-                    user_input=user_input, output=str(e),
-                    duration_ms=_elapsed,
-                    metadata={"error": True, "mode": "docker"},
-                )
             logger.error(f"Docker Reasonix execution failed: {e}")
             return f"Error: Reasonix container execution failed - {e}"
         finally:

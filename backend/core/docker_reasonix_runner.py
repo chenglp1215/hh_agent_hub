@@ -85,28 +85,26 @@ def _build_reasonix_toml(config: Dict[str, Any], api_key_env: str = "DEEPSEEK_AP
         for k, v in tools_section.items():
             parts.append(f'{k} = {v}')
 
-    # [permissions] section
-    permissions = config.get("permissions")
-    if permissions and isinstance(permissions, dict):
-        parts.append('')
-        parts.append('[permissions]')
-        if permissions.get("mode") is not None:
-            parts.append(f'mode  = "{_toml_escape(permissions["mode"])}"')
-        for list_key in ("allow", "deny", "ask"):
-            vals = permissions.get(list_key)
-            if vals and isinstance(vals, list):
-                escaped = ", ".join(f'"{_toml_escape(v)}"' for v in vals)
-                parts.append(f'{list_key} = [{escaped}]')
+    # [permissions] section — 默认 allow 所有工具，确保 reasonix 能正常调用
+    permissions = config.get("permissions") if config.get("permissions") else {"mode": "allow", "allow": ["*"]}
+    parts.append('')
+    parts.append('[permissions]')
+    if permissions.get("mode") is not None:
+        parts.append(f'mode  = "{_toml_escape(permissions["mode"])}"')
+    for list_key in ("allow", "deny", "ask"):
+        vals = permissions.get(list_key)
+        if vals and isinstance(vals, list):
+            escaped = ", ".join(f'"{_toml_escape(v)}"' for v in vals)
+            parts.append(f'{list_key} = [{escaped}]')
 
-    # [sandbox] section
-    sandbox = config.get("sandbox")
-    if sandbox and isinstance(sandbox, dict):
-        parts.append('')
-        parts.append('[sandbox]')
-        if sandbox.get("bash") is not None:
-            parts.append(f'bash    = "{_toml_escape(sandbox["bash"])}"')
-        if sandbox.get("network") is not None:
-            parts.append(f'network = {"true" if sandbox["network"] else "false"}')
+    # [sandbox] section — 默认开启 bash 和网络
+    sandbox = config.get("sandbox") if config.get("sandbox") else {"bash": "enforce", "network": True}
+    parts.append('')
+    parts.append('[sandbox]')
+    if sandbox.get("bash") is not None:
+        parts.append(f'bash    = "{_toml_escape(sandbox["bash"])}"')
+    if sandbox.get("network") is not None:
+        parts.append(f'network = {"true" if sandbox["network"] else "false"}')
 
     # API key env reference
     parts.append('')
@@ -174,22 +172,7 @@ class DockerReasonixRunner:
             "compact_ratio": settings.compact_ratio,
         }
         if settings.extra_json and isinstance(settings.extra_json, dict):
-            extra = settings.extra_json
-            # 支持扁平化的权限/沙箱配置：自动提取到嵌套结构
-            if "permissions" not in extra:
-                perm_keys = {"mode", "allow", "deny", "ask"}
-                perm_data = {k: extra[k] for k in perm_keys if k in extra}
-                if perm_data:
-                    merged["permissions"] = perm_data
-            if "sandbox" not in extra:
-                sand_keys = {"bash", "network"}
-                sand_data = {k: extra[k] for k in sand_keys if k in extra}
-                if sand_data:
-                    merged["sandbox"] = sand_data
-            # 其他 extra 字段直接合并
-            other = {k: v for k, v in extra.items()
-                     if k not in ("mode", "allow", "deny", "ask", "bash", "network")}
-            merged.update(other)
+            merged.update(settings.extra_json)
 
         # Per-agent overrides (only non-None values)
         for key in ("api_key", "base_url", "model", "temperature", "max_turns",

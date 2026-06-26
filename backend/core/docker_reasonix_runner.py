@@ -320,8 +320,7 @@ class DockerReasonixRunner:
 
         host_workspace = self._to_host_path(workspace_dir)
 
-        # 使用命令行参数方式传递任务（与手动执行 reasonix run "task" 一致）
-        inner_cmd = f'reasonix run {shlex.quote(user_input)}'
+        inner_cmd = 'reasonix run "$(cat)"'
 
         cmd = [
             "docker", "run", "--rm", "-i",
@@ -364,8 +363,10 @@ class DockerReasonixRunner:
         _t0 = time_mod.time()
 
         try:
+            # stdin 管道方式 — 与 claudecode echo "input" | claude --print -p - 一致
+            shell_cmd = f'{shlex.join(["echo", "-n", user_input])} | {shlex.join(cmd)}'
             docker_proc = await asyncio.create_subprocess_shell(
-                shlex.join(cmd),
+                shell_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )

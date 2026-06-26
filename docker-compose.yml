@@ -39,6 +39,7 @@ services:
       - FERNET_KEY=${FERNET_KEY:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - AGENT_LOG_LEVEL=${AGENT_LOG_LEVEL:-verbose}
+      - AGENT_CALL_LOG_FILE=/logs/agent_calls_detail.log
     volumes:
       - /opt/hh_agent_hub/workspaces:/data/workflow_workspaces
       - ./logs:/logs
@@ -69,6 +70,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - AGENT_LOG_LEVEL=${AGENT_LOG_LEVEL:-verbose}
+      - AGENT_CALL_LOG_FILE=/logs/agent_calls_detail.log
       - WORKSPACE_HOST_PATH=/opt/hh_agent_hub/workspaces
     volumes:
       - /opt/hh_agent_hub/workspaces:/data/workflow_workspaces

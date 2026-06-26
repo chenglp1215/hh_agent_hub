@@ -26,6 +26,7 @@ class AgentState(TypedDict):
     # Agent 追踪字段（执行追踪用）
     _trace_id: NotRequired[str]
     _parent_span_id: NotRequired[str]
+    task_id: NotRequired[str]
 
 
 class WorkflowEngine:

@@ -97,8 +97,8 @@ def _build_reasonix_toml(config: Dict[str, Any], api_key_env: str = "DEEPSEEK_AP
             escaped = ", ".join(f'"{_toml_escape(v)}"' for v in vals)
             parts.append(f'{list_key} = [{escaped}]')
 
-    # [sandbox] section — 默认开启 bash 和网络
-    sandbox = config.get("sandbox") if config.get("sandbox") else {"bash": "enforce", "network": True}
+    # [sandbox] section — Docker 容器本身已是隔离环境，bash 不强制沙箱
+    sandbox = config.get("sandbox") if config.get("sandbox") else {"bash": "off", "network": True}
     parts.append('')
     parts.append('[sandbox]')
     if sandbox.get("bash") is not None:
@@ -320,7 +320,8 @@ class DockerReasonixRunner:
 
         host_workspace = self._to_host_path(workspace_dir)
 
-        inner_cmd = 'reasonix run "$(cat)"'
+        # 使用命令行参数方式传递任务（与手动执行 reasonix run "task" 一致）
+        inner_cmd = f'reasonix run {shlex.quote(user_input)}'
 
         cmd = [
             "docker", "run", "--rm", "-i",
@@ -363,11 +364,8 @@ class DockerReasonixRunner:
         _t0 = time_mod.time()
 
         try:
-            # Use shell pipe: echo "input" | docker run -i ...
-            shell_cmd = f'{shlex.join(["echo", "-n", user_input])} | {shlex.join(cmd)}'
-
             docker_proc = await asyncio.create_subprocess_shell(
-                shell_cmd,
+                shlex.join(cmd),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -396,15 +394,7 @@ class DockerReasonixRunner:
                 return f"Error: Reasonix container failed (exit {docker_proc.returncode}): {stderr_text[:500]}"
 
             output = stdout.decode("utf-8", errors="replace")
-            _final_output = ""
-            try:
-                result = json.loads(output)
-                if isinstance(result, dict):
-                    _final_output = result.get("result", result.get("output", json.dumps(result, ensure_ascii=False)))
-                else:
-                    _final_output = str(result)
-            except json.JSONDecodeError:
-                _final_output = output.strip() if output.strip() else "Execution completed (no output)"
+            _final_output = output.strip() if output.strip() else "Execution completed (no output)"
 
             _elapsed = int((time_mod.time() - _t0) * 1000)
             if _trace_id:

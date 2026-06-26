@@ -236,7 +236,7 @@ class DockerReasonixRunner:
             return "Error: DeepSeek API key not configured"
 
         return await self._run_docker(
-            workspace_dir=session_workspace,
+            workspace_dir=project_code_path,
             user_input=user_input,
             api_key=api_key,
             model=model,
@@ -428,15 +428,6 @@ class DockerReasonixRunner:
                                 parts.append(f"\n```\n{f.read()}\n```")
                         except (FileNotFoundError, IOError) as e:
                             parts.append(f"\n*Cannot read file: {e}*")
-
-        project_code_path = context.get("project_code_path")
-        if project_code_path:
-            parts.append("")
-            parts.append("## Project Code")
-            # 计算相对于 work_dir 的路径（Docker 容器内 /workspace 为 work_dir）
-            rel_path = os.path.relpath(project_code_path, work_dir)
-            parts.append(f"项目代码位于: {rel_path}")
-            parts.append(f"请在此目录下探索代码: {rel_path}")
 
         if context.get("intermediate_results"):
             parts.append("")

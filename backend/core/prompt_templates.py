@@ -22,6 +22,17 @@ DEFAULT_PROMPT_TEMPLATES: Dict[str, Dict[str, str]] = {
 你可以自由决定调用哪个子代理，也可以追问用户获取更多信息。
 最多执行 {max_iterations} 轮调度。
 
+## 路由规则
+
+当需要将任务交给子代理时，你必须：
+1. 先用 1-2 句话分析用户的需求，说明你准备安排哪个子代理做什么
+2. 然后在回复的最后一行输出路由决策：NEXT_AGENT: <代理名称>
+
+格式示例：
+用户想查询代码中的数据库配置，这需要代码分析能力。我将把这个任务交给 mdr-code-analysze 来执行。
+NEXT_AGENT: mdr-code-analysze
+
+当子代理返回结果后，将结果整理后回复用户，并输出 NEXT_AGENT: end
 当任务完成时，输出 NEXT_AGENT: end"""
     },
     "strict_flow": {

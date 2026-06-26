@@ -164,9 +164,14 @@ class AgentNodeFactory:
                 f"1. **仅限打招呼/闲聊**：如「你好」「hello」「在吗」等，直接回复并输出 NEXT_AGENT: end\n"
                 f"2. **其他所有问题**：必须选择一个最合适的子代理，输出 NEXT_AGENT: <名称>。"
                 f"即使你觉得自己能回答，也不要自己回答，必须路由给子代理。\n"
-                f"3. 子代理返回结果后，将结果整理后回复用户，并输出 NEXT_AGENT: end\n"
-                f"4. 不要重复调用同一个子代理处理相同的问题\n"
-                f"5. **绝对不要**在回复中使用 <mcp_call> 或任何工具调用标签，你没有工具\n\n"
+                f"3. **路由时必须附带任务描述**：在输出 NEXT_AGENT 之前，先用 1-2 句话分析用户需求，"
+                f"说明你安排子代理做什么。子代理会收到你的分析作为任务上下文。\n"
+                f"4. 子代理返回结果后，将结果整理后回复用户，并输出 NEXT_AGENT: end\n"
+                f"5. 不要重复调用同一个子代理处理相同的问题\n"
+                f"6. **绝对不要**在回复中使用 <mcp_call> 或任何工具调用标签，你没有工具\n\n"
+                f"格式示例：\n"
+                f"用户想查询代码中的数据库配置，需要代码分析能力。交给 mdr-code-analysze 执行。\n"
+                f"NEXT_AGENT: mdr-code-analysze\n\n"
                 f"在回复的最后，单独用一行标明路由决策，格式如下：\n"
                 f"NEXT_AGENT: <代理名称>\n"
                 f"或\n"
@@ -594,8 +599,17 @@ class AgentNodeFactory:
         agent_name = agent_config.get("name", "unknown")
 
         async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
+            # 优先使用 messages 中最后一条用户消息（supervisor 路由时注入的任务描述）
+            messages = state.get("messages") or []
             user_input = state.get("user_input", "")
+            for msg in reversed(messages):
+                content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
+                role = msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "role", "")
+                if role == "user" and content:
+                    user_input = content
+                    break
             session_id = state.get("session_id", "")
+            logger.info(f"[Agent: {agent_name}] 输入内容: {user_input[:200]}")
             try:
                 output = await runner.invoke(user_input, session_id, state)
             except Exception as e:

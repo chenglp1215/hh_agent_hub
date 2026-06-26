@@ -194,6 +194,12 @@ class WorkflowEngine:
                 ).strip()
                 if cleaned:
                     intermediate[supervisor_name] = cleaned
+
+                # 将 supervisor 的任务描述注入 messages，让 worker 感知到任务上下文
+                if next_agent != "end" and cleaned:
+                    out_msgs = list(result.get("messages") or state.get("messages") or [])
+                    out_msgs.append({"role": "user", "content": cleaned})
+                    result["messages"] = out_msgs
             else:
                 result["next_agent"] = "end"
                 trace.append({"type": "supervisor_end", "round": rounds + 1, "reason": "no NEXT_AGENT marker"})

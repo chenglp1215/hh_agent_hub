@@ -222,7 +222,11 @@ class DockerReasonixRunner:
         from core.git_ops import ensure_code_exists
         ensure_code_exists(project, project_code_path)
 
-        self._write_project_instructions(session_workspace, context, project.system_prompt)
+        # 将项目代码路径注入 context，让 INSTRUCTIONS.md 告诉 reasonix 代码在哪
+        ctx = dict(context or {})
+        ctx["project_code_path"] = project_code_path
+        ctx["project_name"] = project.name
+        self._write_project_instructions(session_workspace, ctx, project.system_prompt)
 
         api_key = self.config.get("api_key") or self.config.get("deepseek_api_key", "")
         model = self.config.get("model") or self.config.get("deepseek_model", "deepseek-v4-pro")
@@ -424,6 +428,15 @@ class DockerReasonixRunner:
                                 parts.append(f"\n```\n{f.read()}\n```")
                         except (FileNotFoundError, IOError) as e:
                             parts.append(f"\n*Cannot read file: {e}*")
+
+        project_code_path = context.get("project_code_path")
+        if project_code_path:
+            parts.append("")
+            parts.append("## Project Code")
+            # 计算相对于 work_dir 的路径（Docker 容器内 /workspace 为 work_dir）
+            rel_path = os.path.relpath(project_code_path, work_dir)
+            parts.append(f"项目代码位于: {rel_path}")
+            parts.append(f"请在此目录下探索代码: {rel_path}")
 
         if context.get("intermediate_results"):
             parts.append("")

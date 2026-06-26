@@ -326,7 +326,7 @@ class DockerReasonixRunner:
 
         host_workspace = self._to_host_path(workspace_dir)
 
-        inner_cmd = 'reasonix run "$(cat)"'
+        inner_cmd = f'reasonix run -m {shlex.quote(model)} "$(cat)"'
 
         cmd = [
             "docker", "run", "--rm", "-i",

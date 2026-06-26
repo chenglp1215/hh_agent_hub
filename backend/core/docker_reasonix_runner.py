@@ -2,11 +2,15 @@ import asyncio
 import json
 import os
 import shlex
-from typing import Dict, Any, List
+import shutil
+import time as time_mod
+from datetime import datetime
+from typing import Dict, Any, List, Optional
 
 from loguru import logger
 
 from core.session_manager import session_manager
+from core.agent_call_log import agent_call_logger
 
 # Supported DeepSeek model IDs
 SUPPORTED_DEEPSEEK_MODELS = {
@@ -184,7 +188,9 @@ class DockerReasonixRunner:
         return merged
 
     async def invoke(self, user_input: str, session_id: str,
-                     context: Dict[str, Any] = None) -> str:
+                     context: Dict[str, Any] = None,
+                     trace_id: str = None,
+                     parent_span_id: str = None) -> str:
         context = context or {}
 
         self.config = await self._resolve_settings()
@@ -192,16 +198,24 @@ class DockerReasonixRunner:
         has_registry_ref = self.config.get("project_registry_id")
 
         if has_registry_ref:
-            return await self._invoke_with_registry(user_input, session_id, context)
+            return await self._invoke_with_registry(
+                user_input, session_id, context,
+                trace_id=trace_id, parent_span_id=parent_span_id,
+            )
         else:
-            return await self._invoke_legacy(user_input, session_id, context)
+            return await self._invoke_legacy(
+                user_input, session_id, context,
+                trace_id=trace_id, parent_span_id=parent_span_id,
+            )
 
     # ------------------------------------------------------------------
     # Registry mode
     # ------------------------------------------------------------------
 
     async def _invoke_with_registry(self, user_input: str, session_id: str,
-                                     context: Dict[str, Any]) -> str:
+                                     context: Dict[str, Any],
+                                     trace_id: str = None,
+                                     parent_span_id: str = None) -> str:
         from models.project_registry import ProjectRegistry
 
         project_registry_id = self.config.get("project_registry_id")
@@ -241,6 +255,8 @@ class DockerReasonixRunner:
             api_key=api_key,
             model=model,
             timeout_seconds=timeout_seconds,
+            trace_id=trace_id,
+            parent_span_id=parent_span_id,
         )
 
     # ------------------------------------------------------------------
@@ -248,7 +264,9 @@ class DockerReasonixRunner:
     # ------------------------------------------------------------------
 
     async def _invoke_legacy(self, user_input: str, session_id: str,
-                              context: Dict[str, Any]) -> str:
+                              context: Dict[str, Any],
+                              trace_id: str = None,
+                              parent_span_id: str = None) -> str:
         session_workspace = (context or {}).get("session_workspace", "")
 
         api_key = self.config.get("api_key") or self.config.get("deepseek_api_key", "")
@@ -274,6 +292,8 @@ class DockerReasonixRunner:
             api_key=api_key,
             model=model,
             timeout_seconds=timeout_seconds,
+            trace_id=trace_id,
+            parent_span_id=parent_span_id,
         )
 
     # ------------------------------------------------------------------
@@ -282,7 +302,9 @@ class DockerReasonixRunner:
 
     async def _run_docker(self, workspace_dir: str, user_input: str,
                           api_key: str, model: str,
-                          timeout_seconds: int) -> str:
+                          timeout_seconds: int,
+                          trace_id: str = None,
+                          parent_span_id: str = None) -> str:
         """Execute reasonix CLI inside a disposable Docker container."""
 
         # Validate model
@@ -291,9 +313,13 @@ class DockerReasonixRunner:
 
         # Write reasonix.toml with full config into workspace
         toml_content = _build_reasonix_toml(self.config)
-        toml_path = os.path.join(workspace_dir, "reasonix.toml")
-        with open(toml_path, "w", encoding="utf-8") as f:
-            f.write(toml_content)
+        toml_path: Optional[str] = None
+        try:
+            toml_path = os.path.join(workspace_dir, "reasonix.toml")
+            with open(toml_path, "w", encoding="utf-8") as f:
+                f.write(toml_content)
+        except Exception as e:
+            logger.warning(f"Failed to write reasonix.toml: {e}")
 
         host_workspace = self._to_host_path(workspace_dir)
 
@@ -322,6 +348,23 @@ class DockerReasonixRunner:
         logger.info(f"Docker Reasonix: image={self.IMAGE}, model={model}, "
                     f"cwd={host_workspace}, timeout={timeout_seconds}s")
 
+        # Read INSTRUCTIONS.md as system_prompt for logging
+        _instructions = ""
+        _instructions_path = os.path.join(workspace_dir, "INSTRUCTIONS.md")
+        try:
+            with open(_instructions_path, "r", encoding="utf-8") as _f:
+                _instructions = _f.read()
+        except (FileNotFoundError, IOError):
+            pass
+        # TOML content as part of system_prompt
+        _system_prompt = (
+            f"[reasonix.toml]\n{toml_content}\n\n"
+            f"[INSTRUCTIONS.md]\n{_instructions}"
+        )
+        _trace_id = trace_id or ""
+        _span_id = agent_call_logger.start_span(parent_span_id) if _trace_id else ""
+        _t0 = time_mod.time()
+
         try:
             # Use shell pipe: echo "input" | docker run -i ...
             shell_cmd = f'{shlex.join(["echo", "-n", user_input])} | {shlex.join(cmd)}'
@@ -342,32 +385,94 @@ class DockerReasonixRunner:
                 logger.debug(f"Docker stderr: {stderr_text[:500]}")
 
             if docker_proc.returncode != 0:
+                _elapsed = int((time_mod.time() - _t0) * 1000)
+                if _trace_id:
+                    agent_call_logger.log_agent_call(
+                        trace_id=_trace_id, parent_span_id=parent_span_id,
+                        span_id=_span_id, agent_name=self.agent_name,
+                        agent_type="reasonix", system_prompt=_system_prompt,
+                        user_input=user_input, output=stderr_text[:500],
+                        duration_ms=_elapsed,
+                        metadata={"error": True, "mode": "docker", "exit_code": docker_proc.returncode},
+                    )
                 logger.error(f"Docker container exited with code {docker_proc.returncode}: {stderr_text[:500]}")
                 return f"Error: Reasonix container failed (exit {docker_proc.returncode}): {stderr_text[:500]}"
 
             output = stdout.decode("utf-8", errors="replace")
+            _final_output = ""
             try:
                 result = json.loads(output)
                 if isinstance(result, dict):
-                    return result.get("result", result.get("output", json.dumps(result, ensure_ascii=False)))
-                return str(result)
+                    _final_output = result.get("result", result.get("output", json.dumps(result, ensure_ascii=False)))
+                else:
+                    _final_output = str(result)
             except json.JSONDecodeError:
-                return output.strip() if output.strip() else "Execution completed (no output)"
+                _final_output = output.strip() if output.strip() else "Execution completed (no output)"
+
+            _elapsed = int((time_mod.time() - _t0) * 1000)
+            if _trace_id:
+                agent_call_logger.log_agent_call(
+                    trace_id=_trace_id, parent_span_id=parent_span_id,
+                    span_id=_span_id, agent_name=self.agent_name,
+                    agent_type="reasonix", system_prompt=_system_prompt,
+                    user_input=user_input, output=_final_output,
+                    duration_ms=_elapsed,
+                    metadata={"mode": "docker"},
+                )
+            return _final_output
 
         except asyncio.TimeoutError:
+            _elapsed = int((time_mod.time() - _t0) * 1000)
+            if _trace_id:
+                agent_call_logger.log_agent_call(
+                    trace_id=_trace_id, parent_span_id=parent_span_id,
+                    span_id=_span_id, agent_name=self.agent_name,
+                    agent_type="reasonix", system_prompt=_system_prompt,
+                    user_input=user_input, output="",
+                    duration_ms=_elapsed,
+                    metadata={"error": True, "mode": "docker", "timeout": True, "timeout_seconds": timeout_seconds},
+                )
             logger.error(f"Docker Reasonix timed out after {timeout_seconds}s")
             return f"Error: Reasonix execution timed out after {timeout_seconds} seconds"
         except FileNotFoundError:
+            _elapsed = int((time_mod.time() - _t0) * 1000)
+            if _trace_id:
+                agent_call_logger.log_agent_call(
+                    trace_id=_trace_id, parent_span_id=parent_span_id,
+                    span_id=_span_id, agent_name=self.agent_name,
+                    agent_type="reasonix", system_prompt=_system_prompt,
+                    user_input=user_input, output="",
+                    duration_ms=_elapsed,
+                    metadata={"error": True, "mode": "docker", "detail": "Docker not found"},
+                )
             logger.error("Docker not found. Ensure Docker is installed and in PATH.")
             return "Error: Docker not available - cannot execute Reasonix agent"
         except Exception as e:
+            _elapsed = int((time_mod.time() - _t0) * 1000)
+            if _trace_id:
+                agent_call_logger.log_agent_call(
+                    trace_id=_trace_id, parent_span_id=parent_span_id,
+                    span_id=_span_id, agent_name=self.agent_name,
+                    agent_type="reasonix", system_prompt=_system_prompt,
+                    user_input=user_input, output=str(e),
+                    duration_ms=_elapsed,
+                    metadata={"error": True, "mode": "docker"},
+                )
             logger.error(f"Docker Reasonix execution failed: {e}")
             return f"Error: Reasonix container execution failed - {e}"
         finally:
-            try:
-                os.unlink(toml_path)
-            except OSError:
-                pass
+            # 不再删除 reasonix.toml，改为复制到 logs/ 目录保留用于调试
+            if toml_path is not None:
+                try:
+                    _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                    _log_dir = os.path.join(_project_root, "logs")
+                    os.makedirs(_log_dir, exist_ok=True)
+                    _timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    _dest = os.path.join(_log_dir, f"reasonix_{self.agent_name}_{_timestamp}.toml")
+                    shutil.copy2(toml_path, _dest)
+                    logger.debug(f"Preserved reasonix.toml for debugging: {_dest}")
+                except Exception:
+                    pass
 
     # ------------------------------------------------------------------
     # Project instructions writer

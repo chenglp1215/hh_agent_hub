@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import settings, TORTOISE_ORM
 from core.task_queue import TaskQueue, get_task_queue
 from core.session_manager import session_manager
+from core.agent_call_log import agent_call_logger  # noqa: F401 — 触发单例初始化
 
 
 import uuid

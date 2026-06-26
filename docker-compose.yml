@@ -38,6 +38,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change-me-to-random-secret}
       - FERNET_KEY=${FERNET_KEY:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - AGENT_LOG_LEVEL=${AGENT_LOG_LEVEL:-verbose}
     volumes:
       - /opt/hh_agent_hub/workspaces:/data/workflow_workspaces
       - ./logs:/logs
@@ -67,6 +68,7 @@ services:
       - DB_NAME=${DB_NAME:-agent_platform}
       - REDIS_URL=redis://redis:6379/0
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - AGENT_LOG_LEVEL=${AGENT_LOG_LEVEL:-verbose}
       - WORKSPACE_HOST_PATH=/opt/hh_agent_hub/workspaces
     volumes:
       - /opt/hh_agent_hub/workspaces:/data/workflow_workspaces

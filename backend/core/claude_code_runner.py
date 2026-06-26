@@ -1,10 +1,12 @@
 import json
 import os
+import time as time_mod
 from typing import Dict, Any, List, Optional
 
 from loguru import logger
 
 from core.session_manager import session_manager
+from core.agent_call_log import agent_call_logger
 
 
 class ClaudeCodeRunner:
@@ -36,7 +38,9 @@ class ClaudeCodeRunner:
         self.system_prompt = system_prompt
 
     async def invoke(self, user_input: str, session_id: str,
-                     context: Dict[str, Any] = None) -> str:
+                     context: Dict[str, Any] = None,
+                     trace_id: str = None,
+                     parent_span_id: str = None) -> str:
         """Execute a Claude Code task.
 
         Args:
@@ -44,6 +48,8 @@ class ClaudeCodeRunner:
             session_id: Session identifier
             context: Additional context including system_prompt, intermediate_results,
                      session_workspace
+            trace_id: Agent call trace ID (for logging)
+            parent_span_id: Parent span ID (for logging hierarchy)
 
         Returns:
             Claude Code execution result text
@@ -56,16 +62,24 @@ class ClaudeCodeRunner:
         )
 
         if has_registry_refs:
-            return await self._invoke_with_registries(user_input, session_id, context)
+            return await self._invoke_with_registries(
+                user_input, session_id, context,
+                trace_id=trace_id, parent_span_id=parent_span_id,
+            )
         else:
-            return await self._invoke_legacy(user_input, session_id, context)
+            return await self._invoke_legacy(
+                user_input, session_id, context,
+                trace_id=trace_id, parent_span_id=parent_span_id,
+            )
 
     # ------------------------------------------------------------------
     # New mode: project_registry + settings_registry
     # ------------------------------------------------------------------
 
     async def _invoke_with_registries(self, user_input: str, session_id: str,
-                                       context: Dict[str, Any]) -> str:
+                                       context: Dict[str, Any],
+                                       trace_id: str = None,
+                                       parent_span_id: str = None) -> str:
         """New mode: resolve config from registries, use claude-code-sdk."""
         project_registry_id = self.config.get("project_registry_id")
         settings_registry_id = self.config.get("settings_registry_id")
@@ -91,7 +105,10 @@ class ClaudeCodeRunner:
             from core.git_ops import get_workspace_path
             workspace_dir = str(get_workspace_path(project))
             self._write_claude_md(workspace_dir, context, project.system_prompt)
-            return await self._run_fallback(workspace_dir, user_input, settings, project, context)
+            return await self._run_fallback(
+                workspace_dir, user_input, settings, project, context,
+                trace_id=trace_id, parent_span_id=parent_span_id,
+            )
 
         project_code_path = session_manager.get_project_code_path(session_id, project.name)
         agent_workspace = session_manager.ensure_agent_workspace(session_id, self.agent_name)
@@ -118,10 +135,15 @@ class ClaudeCodeRunner:
                 settings=settings,
                 project=project,
                 context=context,
+                trace_id=trace_id,
+                parent_span_id=parent_span_id,
             )
         except ImportError:
             logger.warning("claude-code-sdk not installed, falling back to legacy CLI")
-            return await self._run_cli_legacy(agent_workspace, user_input, settings)
+            return await self._run_cli_legacy(
+                agent_workspace, user_input, settings,
+                trace_id=trace_id, parent_span_id=parent_span_id,
+            )
         except Exception as e:
             logger.error(f"Claude Code SDK execution failed: {e}")
             return f"Error: Claude Code execution failed - {e}"
@@ -145,7 +167,9 @@ class ClaudeCodeRunner:
     # ------------------------------------------------------------------
 
     async def _run_sdk(self, workspace_dir: str, user_input: str,
-                        settings, project, context: Dict[str, Any]) -> str:
+                        settings, project, context: Dict[str, Any],
+                        trace_id: str = None,
+                        parent_span_id: str = None) -> str:
         """Execute Claude Code using claude-code-sdk."""
         from claude_code_sdk import ClaudeSDKClient, ClaudeCodeOptions
         from claude_code_sdk.types import (
@@ -204,6 +228,12 @@ class ClaudeCodeRunner:
         timeout_seconds = (project.fix_timeout_minutes or 30) * 60
         options = ClaudeCodeOptions(**options_kwargs)
 
+        # Build system_prompt for Agent call logging
+        _system_prompt = "\n\n".join(system_prompt_parts) if system_prompt_parts else ""
+        _trace_id = trace_id or ""
+        _span_id = agent_call_logger.start_span(parent_span_id) if _trace_id else ""
+        _t0 = time_mod.time()
+
         logger.info(f"Claude Code SDK: model={options_kwargs.get('model')}, "
                      f"max_turns={settings.max_turns}, cwd={workspace_dir}, "
                      f"timeout={timeout_seconds}s")
@@ -240,10 +270,31 @@ class ClaudeCodeRunner:
 
                         if is_error:
                             logger.warning(f"Claude Code returned error: {result}")
+                            _elapsed = int((time_mod.time() - _t0) * 1000)
+                            if _trace_id:
+                                agent_call_logger.log_agent_call(
+                                    trace_id=_trace_id, parent_span_id=parent_span_id,
+                                    span_id=_span_id, agent_name=self.agent_name,
+                                    agent_type="claudecode", system_prompt=_system_prompt,
+                                    user_input=user_input, output=result,
+                                    duration_ms=_elapsed,
+                                    metadata={"error": True, "mode": "sdk"},
+                                )
                             return f"Claude Code execution error: {result}"
 
+                        _elapsed = int((time_mod.time() - _t0) * 1000)
+                        _final_output = result or last_text or "Execution completed (no output)"
+                        if _trace_id:
+                            agent_call_logger.log_agent_call(
+                                trace_id=_trace_id, parent_span_id=parent_span_id,
+                                span_id=_span_id, agent_name=self.agent_name,
+                                agent_type="claudecode", system_prompt=_system_prompt,
+                                user_input=user_input, output=_final_output,
+                                duration_ms=_elapsed,
+                                metadata={"mode": "sdk"},
+                            )
                         logger.info(f"Claude Code completed: cost={getattr(message, 'total_cost_usd', 'N/A')}")
-                        return result or last_text or "Execution completed (no output)"
+                        return _final_output
 
                 if got_result:
                     break
@@ -269,7 +320,9 @@ class ClaudeCodeRunner:
     # ------------------------------------------------------------------
 
     async def _run_cli_legacy(self, workspace_dir: str, user_input: str,
-                               settings) -> str:
+                               settings,
+                               trace_id: str = None,
+                               parent_span_id: str = None) -> str:
         """Fallback to CLI subprocess execution."""
         import asyncio
 
@@ -285,6 +338,18 @@ class ClaudeCodeRunner:
             "--print",
             "--output-format", "json",
         ]
+
+        # Read CLAUDE.md as the system_prompt for logging
+        _system_prompt = ""
+        _claude_md_path = os.path.join(workspace_dir, "CLAUDE.md")
+        try:
+            with open(_claude_md_path, "r", encoding="utf-8") as _f:
+                _system_prompt = _f.read()
+        except (FileNotFoundError, IOError):
+            pass
+        _trace_id = trace_id or ""
+        _span_id = agent_call_logger.start_span(parent_span_id) if _trace_id else ""
+        _t0 = time_mod.time()
 
         logger.info(f"Claude Code CLI (legacy): model={model}, max_turns={max_turns}, cwd={workspace_dir}")
 
@@ -305,21 +370,55 @@ class ClaudeCodeRunner:
 
             if process.returncode != 0:
                 error_msg = stderr.decode("utf-8", errors="replace")
+                _elapsed = int((time_mod.time() - _t0) * 1000)
+                if _trace_id:
+                    agent_call_logger.log_agent_call(
+                        trace_id=_trace_id, parent_span_id=parent_span_id,
+                        span_id=_span_id, agent_name=self.agent_name,
+                        agent_type="claudecode", system_prompt=_system_prompt,
+                        user_input=user_input, output=error_msg,
+                        duration_ms=_elapsed,
+                        metadata={"error": True, "mode": "cli_legacy"},
+                    )
                 raise RuntimeError(f"Claude Code exited with code {process.returncode}: {error_msg}")
 
             output = stdout.decode("utf-8", errors="replace")
             try:
                 result = json.loads(output)
-                return result.get("result", output)
+                _final_output = result.get("result", output)
             except json.JSONDecodeError:
-                return output
+                _final_output = output
+
+            _elapsed = int((time_mod.time() - _t0) * 1000)
+            if _trace_id:
+                agent_call_logger.log_agent_call(
+                    trace_id=_trace_id, parent_span_id=parent_span_id,
+                    span_id=_span_id, agent_name=self.agent_name,
+                    agent_type="claudecode", system_prompt=_system_prompt,
+                    user_input=user_input, output=_final_output,
+                    duration_ms=_elapsed,
+                    metadata={"mode": "cli_legacy"},
+                )
+            return _final_output
 
         except asyncio.TimeoutError:
+            _elapsed = int((time_mod.time() - _t0) * 1000)
+            if _trace_id:
+                agent_call_logger.log_agent_call(
+                    trace_id=_trace_id, parent_span_id=parent_span_id,
+                    span_id=_span_id, agent_name=self.agent_name,
+                    agent_type="claudecode", system_prompt=_system_prompt,
+                    user_input=user_input, output="",
+                    duration_ms=_elapsed,
+                    metadata={"error": True, "mode": "cli_legacy", "timeout": True},
+                )
             logger.error("Claude Code CLI timed out")
             return "Error: Claude Code execution timed out"
 
     async def _run_fallback(self, workspace_dir: str, user_input: str,
-                             settings, project, context: Dict[str, Any]) -> str:
+                             settings, project, context: Dict[str, Any],
+                             trace_id: str = None,
+                             parent_span_id: str = None) -> str:
         """Fallback when no session_workspace is available (legacy behavior)."""
         from core.git_ops import clone_or_pull_repo
         try:
@@ -335,9 +434,14 @@ class ClaudeCodeRunner:
                 settings=settings,
                 project=project,
                 context=context,
+                trace_id=trace_id,
+                parent_span_id=parent_span_id,
             )
         except ImportError:
-            return await self._run_cli_legacy(workspace_dir, user_input, settings)
+            return await self._run_cli_legacy(
+                workspace_dir, user_input, settings,
+                trace_id=trace_id, parent_span_id=parent_span_id,
+            )
         except Exception as e:
             logger.error(f"Claude Code execution failed: {e}")
             return f"Error: Claude Code execution failed - {e}"
@@ -347,7 +451,9 @@ class ClaudeCodeRunner:
     # ------------------------------------------------------------------
 
     async def _invoke_legacy(self, user_input: str, session_id: str,
-                              context: Dict[str, Any]) -> str:
+                              context: Dict[str, Any],
+                              trace_id: str = None,
+                              parent_span_id: str = None) -> str:
         """Legacy mode: use inline config fields for backward compatibility."""
         import asyncio
 
@@ -389,6 +495,18 @@ class ClaudeCodeRunner:
 
         logger.info(f"Claude Code CLI (legacy): model={model}, max_turns={max_turns}, work_dir={work_dir}")
 
+        # Read CLAUDE.md as system_prompt for logging
+        _system_prompt = ""
+        _claude_md_path = os.path.join(work_dir, "CLAUDE.md")
+        try:
+            with open(_claude_md_path, "r", encoding="utf-8") as _f:
+                _system_prompt = _f.read()
+        except (FileNotFoundError, IOError):
+            pass
+        _trace_id = trace_id or ""
+        _span_id = agent_call_logger.start_span(parent_span_id) if _trace_id else ""
+        _t0 = time_mod.time()
+
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -406,22 +524,74 @@ class ClaudeCodeRunner:
 
             if process.returncode != 0:
                 error_msg = stderr.decode("utf-8", errors="replace")
+                _elapsed = int((time_mod.time() - _t0) * 1000)
+                if _trace_id:
+                    agent_call_logger.log_agent_call(
+                        trace_id=_trace_id, parent_span_id=parent_span_id,
+                        span_id=_span_id, agent_name=self.agent_name,
+                        agent_type="claudecode", system_prompt=_system_prompt,
+                        user_input=user_input, output=error_msg,
+                        duration_ms=_elapsed,
+                        metadata={"error": True, "mode": "cli_legacy_inline"},
+                    )
                 raise RuntimeError(f"Claude Code exited with code {process.returncode}: {error_msg}")
 
             output = stdout.decode("utf-8", errors="replace")
             try:
                 result = json.loads(output)
-                return result.get("result", output)
+                _final_output = result.get("result", output)
             except json.JSONDecodeError:
-                return output
+                _final_output = output
+
+            _elapsed = int((time_mod.time() - _t0) * 1000)
+            if _trace_id:
+                agent_call_logger.log_agent_call(
+                    trace_id=_trace_id, parent_span_id=parent_span_id,
+                    span_id=_span_id, agent_name=self.agent_name,
+                    agent_type="claudecode", system_prompt=_system_prompt,
+                    user_input=user_input, output=_final_output,
+                    duration_ms=_elapsed,
+                    metadata={"mode": "cli_legacy_inline"},
+                )
+            return _final_output
 
         except asyncio.TimeoutError:
+            _elapsed = int((time_mod.time() - _t0) * 1000)
+            if _trace_id:
+                agent_call_logger.log_agent_call(
+                    trace_id=_trace_id, parent_span_id=parent_span_id,
+                    span_id=_span_id, agent_name=self.agent_name,
+                    agent_type="claudecode", system_prompt=_system_prompt,
+                    user_input=user_input, output="",
+                    duration_ms=_elapsed,
+                    metadata={"error": True, "mode": "cli_legacy_inline", "timeout": True},
+                )
             logger.error(f"Claude Code timeout after {max_turns * 15}s")
             return f"Error: Claude Code execution timed out after {max_turns * 15} seconds"
         except FileNotFoundError:
+            _elapsed = int((time_mod.time() - _t0) * 1000)
+            if _trace_id:
+                agent_call_logger.log_agent_call(
+                    trace_id=_trace_id, parent_span_id=parent_span_id,
+                    span_id=_span_id, agent_name=self.agent_name,
+                    agent_type="claudecode", system_prompt=_system_prompt,
+                    user_input=user_input, output="",
+                    duration_ms=_elapsed,
+                    metadata={"error": True, "mode": "cli_legacy_inline", "detail": "claude CLI not found"},
+                )
             logger.error("Claude Code CLI not found")
             return "Error: Claude Code CLI not found"
         except Exception as e:
+            _elapsed = int((time_mod.time() - _t0) * 1000)
+            if _trace_id:
+                agent_call_logger.log_agent_call(
+                    trace_id=_trace_id, parent_span_id=parent_span_id,
+                    span_id=_span_id, agent_name=self.agent_name,
+                    agent_type="claudecode", system_prompt=_system_prompt,
+                    user_input=user_input, output=str(e),
+                    duration_ms=_elapsed,
+                    metadata={"error": True, "mode": "cli_legacy_inline"},
+                )
             logger.error(f"Claude Code execution failed: {e}")
             raise
 

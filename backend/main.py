@@ -8,6 +8,7 @@ import secrets
 import sys
 
 from core.trigger_scheduler import init_scheduler, shutdown_scheduler
+from core.agent_call_log import agent_call_logger  # noqa: F401 — 触发单例初始化
 from models.sys_config import SysConfig
 from models.user import User
 import bcrypt as _bcrypt

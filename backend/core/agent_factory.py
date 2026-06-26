@@ -9,6 +9,7 @@ from langchain_core.messages import SystemMessage
 from loguru import logger
 
 from core.llm_manager import llm_manager
+from core.agent_call_log import agent_call_logger
 from core.mcp_client import mcp_client
 from core.knowledge_injector import knowledge_injector
 
@@ -194,17 +195,25 @@ class AgentNodeFactory:
             user_input = state.get("user_input", "")
             logger.info(f"[Agent: {agent_name}] 开始执行，输入长度={len(user_input)}")
 
+            # Agent call logging: trace context
+            _trace_id = state.get("_trace_id", "")
+            _parent_span_id = state.get("_parent_span_id", "")
+            _span_id = agent_call_logger.start_span(_parent_span_id) if _trace_id else ""
+
             trace = state.get("trace") or []
             trace.append({"type": "agent_start", "agent": agent_name, "input_len": len(user_input)})
 
             kb_ids = agent_config.get("knowledge_base_ids", [])
             agent = react_agent
+            # 记录实际使用的 system_prompt（有 KB 注入时用 injected_prompt）
+            actual_prompt = full_prompt
             if kb_ids and user_input:
                 injected_prompt = await knowledge_injector.inject(kb_ids, user_input, base_prompt)
                 if skill_summary:
                     injected_prompt += "\n\n" + skill_summary
                 if routing_instruction:
                     injected_prompt += routing_instruction
+                actual_prompt = injected_prompt
                 agent = create_react_agent(model=llm, tools=tools, state_modifier=SystemMessage(content=injected_prompt))
 
             input_msgs = state.get("messages", [])
@@ -243,7 +252,29 @@ class AgentNodeFactory:
             )
             output = last_message.content if last_message else ""
 
-            # 提取 token 使用量
+            # 提取 token 使用量用于日志
+            _token_usage = {}
+            if last_message:
+                _um = getattr(last_message, 'usage_metadata', None)
+                if _um:
+                    _token_usage = {
+                        "input_tokens": getattr(_um, 'input_tokens', 0) or 0,
+                        "output_tokens": getattr(_um, 'output_tokens', 0) or 0,
+                        "total_tokens": getattr(_um, 'total_tokens', 0) or 0,
+                    }
+                else:
+                    _rm = getattr(last_message, 'response_metadata', None)
+                    if _rm:
+                        _usage = _rm.get('usage', {})
+                        if _usage:
+                            _token_usage = {
+                                "input_tokens": _usage.get('prompt_tokens', 0) or 0,
+                                "output_tokens": _usage.get('completion_tokens', 0) or 0,
+                                "total_tokens": _usage.get('total_tokens', 0) or 0,
+                            }
+                            _token_usage["model_name"] = _rm.get('model_name')
+
+            # 提取 token 使用量（现有逻辑，保持不动）
             task_id = state.get("task_id", "")
             logger.info(f"[Agent: {agent_name}] task_id={task_id}, has_message={last_message is not None}")
             if task_id and last_message:
@@ -259,10 +290,28 @@ class AgentNodeFactory:
                 "type": "agent_end", "agent": agent_name,
                 "output_len": len(output), "elapsed_ms": elapsed,
             })
+
+            # Agent call logging
+            if _trace_id:
+                agent_call_logger.log_agent_call(
+                    trace_id=_trace_id,
+                    parent_span_id=_parent_span_id,
+                    span_id=_span_id,
+                    agent_name=agent_name,
+                    agent_type="local",
+                    system_prompt=actual_prompt,
+                    user_input=user_input,
+                    output=output,
+                    duration_ms=elapsed,
+                    token_usage=_token_usage,
+                )
+
             return {
                 "messages": result.get("messages", []),
                 "intermediate_results": intermediate,
                 "trace": trace,
+                "_trace_id": _trace_id,
+                "_parent_span_id": _span_id,
             }
 
         return agent_node
@@ -478,13 +527,29 @@ class AgentNodeFactory:
         agent_name = agent_config.get("name", "unknown")
 
         async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
+            import time as time_mod
+            t0 = time_mod.time()
             user_input = state.get("user_input", "")
             session_id = state.get("session_id", "")
+            _trace_id = state.get("_trace_id", "")
+            _parent_span_id = state.get("_parent_span_id", "")
+            _span_id = agent_call_logger.start_span(_parent_span_id) if _trace_id else ""
             try:
                 output = await client.send(user_input, session_id, state)
             except Exception as e:
                 output = f"HTTP Agent error: {str(e)}"
                 logger.error(f"HTTP Agent {agent_name} failed: {e}")
+
+            elapsed = int((time_mod.time() - t0) * 1000)
+            if _trace_id:
+                agent_call_logger.log_agent_call(
+                    trace_id=_trace_id, parent_span_id=_parent_span_id,
+                    span_id=_span_id, agent_name=agent_name,
+                    agent_type="http",
+                    user_input=user_input, output=output,
+                    duration_ms=elapsed,
+                    metadata={"error": output.startswith("HTTP Agent error")},
+                )
 
             intermediate = state.get("intermediate_results", {})
             intermediate[agent_name] = output
@@ -510,13 +575,29 @@ class AgentNodeFactory:
         agent_name = agent_config.get("name", "unknown")
 
         async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
+            import time as time_mod
+            t0 = time_mod.time()
             user_input = state.get("user_input", "")
             session_id = state.get("session_id", "")
+            _trace_id = state.get("_trace_id", "")
+            _parent_span_id = state.get("_parent_span_id", "")
+            _span_id = agent_call_logger.start_span(_parent_span_id) if _trace_id else ""
             try:
                 output = await client.send(user_input, session_id, state)
             except Exception as e:
                 output = f"A2A Agent error: {str(e)}"
                 logger.error(f"A2A Agent {agent_name} failed: {e}")
+
+            elapsed = int((time_mod.time() - t0) * 1000)
+            if _trace_id:
+                agent_call_logger.log_agent_call(
+                    trace_id=_trace_id, parent_span_id=_parent_span_id,
+                    span_id=_span_id, agent_name=agent_name,
+                    agent_type="a2a",
+                    user_input=user_input, output=output,
+                    duration_ms=elapsed,
+                    metadata={"error": output.startswith("A2A Agent error")},
+                )
 
             intermediate = state.get("intermediate_results", {})
             intermediate[agent_name] = output
@@ -557,8 +638,14 @@ class AgentNodeFactory:
         async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
             user_input = state.get("user_input", "")
             session_id = state.get("session_id", "")
+            _trace_id = state.get("_trace_id", "")
+            _parent_span_id = state.get("_parent_span_id", "")
             try:
-                output = await runner.invoke(user_input, session_id, state)
+                output = await runner.invoke(
+                    user_input, session_id, state,
+                    trace_id=_trace_id,
+                    parent_span_id=_parent_span_id,
+                )
             except Exception as e:
                 output = f"Claude Code Agent error: {str(e)}"
                 logger.error(f"Claude Code Agent {agent_name} failed: {e}")
@@ -610,9 +697,15 @@ class AgentNodeFactory:
                     user_input = content
                     break
             session_id = state.get("session_id", "")
+            _trace_id = state.get("_trace_id", "")
+            _parent_span_id = state.get("_parent_span_id", "")
             logger.info(f"[Agent: {agent_name}] 输入内容: {user_input[:200]}")
             try:
-                output = await runner.invoke(user_input, session_id, state)
+                output = await runner.invoke(
+                    user_input, session_id, state,
+                    trace_id=_trace_id,
+                    parent_span_id=_parent_span_id,
+                )
             except Exception as e:
                 output = f"Reasonix Agent error: {str(e)}"
                 logger.error(f"Reasonix Agent {agent_name} failed: {e}")

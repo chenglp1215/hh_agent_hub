@@ -17,6 +17,8 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 from core.prompt_templates import render_prompt
+from core.execution_tracer import ExecutionTracer
+from core.agent_call_log import agent_call_logger
 
 from models.app import App
 from models.workflow import Workflow
@@ -196,6 +198,19 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
         from core.token_callback import current_task_id
         current_task_id.set(task_id)
 
+        # 初始化执行追踪（ExecutionTracer + AgentCallLogger）
+        tracer = ExecutionTracer(
+            execution_id=task_id,
+            workspace_path=session.workspace_path or "",
+        )
+        tracer.start_execution(
+            workflow_name=app.name or "",
+            workflow_id=app.workflow_id,
+            app_id=app_id,
+        )
+        trace_id = agent_call_logger.start_trace()
+        initial_state["_trace_id"] = trace_id
+
         if stream:
             # ── 流式执行 ──
             await task_queue.publish_event(task_id, "thinking", content="正在分析问题...")
@@ -243,6 +258,7 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
                 await task_queue.publish_event(task_id, "text", content=final_answer)
 
             duration_ms = int((time_mod.time() - start) * 1000)
+            tracer.finish_execution("success")
             await task_queue.publish_event(
                 task_id, "done",
                 session_id=session_id, duration_ms=duration_ms,
@@ -291,6 +307,7 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
             if result is None and last_error:
                 raise last_error
             duration_ms = int((time_mod.time() - start) * 1000)
+            tracer.finish_execution("success")
 
             final_answer = result.get("final_answer", "")
             if not final_answer:
@@ -372,6 +389,10 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
 
     except Exception as e:
         logger.error(f"Task {task_id} failed: {e}")
+        try:
+            tracer.finish_execution("failed")
+        except Exception:
+            pass
         await task_queue.publish_result(task_id, {
             "error": str(e),
             "final_answer": f"执行出错: {str(e)}",

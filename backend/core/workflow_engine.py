@@ -1,7 +1,11 @@
 import re
+import time as time_mod
 from typing import TypedDict, List, Any, Dict, Optional
+from typing_extensions import NotRequired
 from langgraph.graph import StateGraph, END
 from loguru import logger
+
+from core.agent_call_log import agent_call_logger
 
 
 class AgentState(TypedDict):
@@ -19,6 +23,9 @@ class AgentState(TypedDict):
     session_workspace: str
     termination_reason: Optional[str]
     partial_completion: bool
+    # Agent 追踪字段（执行追踪用）
+    _trace_id: NotRequired[str]
+    _parent_span_id: NotRequired[str]
 
 
 class WorkflowEngine:
@@ -82,9 +89,15 @@ class WorkflowEngine:
         max_supervisor_rounds = min(config_rounds, 20)
 
         async def supervisor_wrapper(state: AgentState) -> dict:
+            t0 = time_mod.time()
             trace = state.get("trace") or []
             intermediate = state.get("intermediate_results") or {}
             rounds = intermediate.get("_supervisor_rounds", 0)
+
+            # Agent call logging: trace context
+            _trace_id = state.get("_trace_id", "")
+            _parent_span_id = state.get("_parent_span_id", "")
+            _span_id = agent_call_logger.start_span(_parent_span_id) if _trace_id else ""
 
             if rounds >= max_supervisor_rounds:
                 logger.warning(
@@ -206,6 +219,28 @@ class WorkflowEngine:
                 logger.warning(f"[Supervisor: {supervisor_name}] 未找到 NEXT_AGENT 标记，结束工作流")
             result["intermediate_results"] = intermediate
             result["trace"] = trace
+
+            # --- Agent call logging & trace propagation ---
+            if _trace_id:
+                elapsed = int((time_mod.time() - t0) * 1000)
+                agent_call_logger.log_agent_call(
+                    trace_id=_trace_id,
+                    parent_span_id=_parent_span_id,
+                    span_id=_span_id,
+                    agent_name=supervisor_name,
+                    agent_type="supervisor",
+                    user_input=str(state.get("user_input", "")),
+                    output=output,
+                    duration_ms=elapsed,
+                    metadata={
+                        "round": rounds + 1,
+                        "routing_decision": result.get("next_agent", "end"),
+                    },
+                )
+                # Propagate trace context to worker
+                result["_trace_id"] = _trace_id
+                result["_parent_span_id"] = _span_id
+
             return result
 
         graph.add_node("supervisor", supervisor_wrapper)

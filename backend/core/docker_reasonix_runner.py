@@ -109,6 +109,10 @@ def _build_reasonix_toml(config: Dict[str, Any], api_key_env: str = "REASONIX_AP
     parts.append('')
     parts.append(f'# API key passed via environment variable: {api_key_env}')
 
+    base_url = config.get("base_url")
+    if base_url:
+        parts.append(f'# base_url: {_toml_escape(base_url)}')
+
     return "\n".join(parts) + "\n"
 
 
@@ -158,6 +162,7 @@ class DockerReasonixRunner:
         # DB settings as base, per-agent config overrides
         merged = {
             "api_key": settings.api_key,
+            "base_url": settings.base_url,
             "model": settings.model,
             "temperature": settings.temperature,
             "max_turns": settings.max_turns,
@@ -169,7 +174,7 @@ class DockerReasonixRunner:
             merged.update(settings.extra_json)
 
         # Per-agent overrides (only non-None values)
-        for key in ("api_key", "model", "temperature", "max_turns",
+        for key in ("api_key", "base_url", "model", "temperature", "max_turns",
                      "reasoning_language", "auto_plan", "compact_ratio",
                      "project_registry_id", "timeout_minutes"):
             val = self.config.get(key)
@@ -295,13 +300,20 @@ class DockerReasonixRunner:
             "--network", self.NETWORK,
             "--user", "1001:1001",
             "-e", f"REASONIX_API_KEY={api_key}",
+        ]
+
+        base_url = self.config.get("base_url")
+        if base_url:
+            cmd.extend(["-e", f"DEEPSEEK_BASE_URL={base_url}"])
+
+        cmd.extend([
             "-v", f"{host_workspace}:/workspace",
             "-w", "/workspace",
             "--memory", "512m",
             "--cpus", "1.0",
             self.IMAGE,
             "sh", "-c", inner_cmd,
-        ]
+        ])
 
         logger.info(f"Docker Reasonix: image={self.IMAGE}, model={model}, "
                     f"cwd={host_workspace}, timeout={timeout_seconds}s")

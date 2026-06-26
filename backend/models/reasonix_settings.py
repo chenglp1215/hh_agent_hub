@@ -8,6 +8,7 @@ class ReasonixSettingsRegistry(Model):
     description = fields.TextField(null=True)
     model = fields.CharField(max_length=100, default="deepseek-v4-pro")
     api_key = fields.CharField(max_length=255, null=True)
+    base_url = fields.CharField(max_length=500, null=True)
     temperature = fields.FloatField(default=0.0)
     max_turns = fields.IntField(default=25)
     reasoning_language = fields.CharField(max_length=10, default="zh")

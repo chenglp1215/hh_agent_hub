@@ -44,9 +44,18 @@
           </a-col>
         </a-row>
 
-        <a-form-item label="API Key">
-          <a-input-password v-model:value="form.api_key" placeholder="sk-..." />
-        </a-form-item>
+        <a-row :gutter="16">
+          <a-col :span="16">
+            <a-form-item label="API Key">
+              <a-input-password v-model:value="form.api_key" placeholder="sk-..." />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="Base URL">
+              <a-input v-model:value="form.base_url" placeholder="留空使用默认地址" />
+            </a-form-item>
+          </a-col>
+        </a-row>
 
         <h3 class="text-lg font-semibold mb-4 mt-4 text-[#5e6ad2]">Agent 行为</h3>
         <a-row :gutter="16">
@@ -120,6 +129,7 @@ const form = ref<any>({
   description: '',
   model: 'deepseek-v4-pro',
   api_key: '',
+  base_url: '',
   temperature: 0.0,
   max_turns: 25,
   reasoning_language: 'zh',
@@ -159,6 +169,7 @@ onMounted(async () => {
         description: d.description || '',
         model: d.model || 'deepseek-v4-pro',
         api_key: d.api_key || '',
+        base_url: d.base_url || '',
         temperature: d.temperature ?? 0.0,
         max_turns: d.max_turns ?? 25,
         reasoning_language: d.reasoning_language || 'zh',

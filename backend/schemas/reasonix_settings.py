@@ -8,6 +8,7 @@ class ReasonixSettingsCreate(BaseModel):
     description: Optional[str] = None
     model: str = "deepseek-v4-pro"
     api_key: Optional[str] = None
+    base_url: Optional[str] = None
     temperature: float = 0.0
     max_turns: int = 25
     reasoning_language: str = "zh"
@@ -21,6 +22,7 @@ class ReasonixSettingsUpdate(BaseModel):
     description: Optional[str] = None
     model: Optional[str] = None
     api_key: Optional[str] = None
+    base_url: Optional[str] = None
     temperature: Optional[float] = None
     max_turns: Optional[int] = None
     reasoning_language: Optional[str] = None

@@ -296,8 +296,8 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
             })
 
         else:
-            # ── 非流式执行（触发器任务自动重试 LLM 风控误拦） ──
-            max_retries = 2 if session_id.startswith("trigger_") else 0
+            # ── 非流式执行（LLM 内容风控误拦自动重试 2 次） ──
+            max_retries = 2
             result = None
             last_error = None
             for attempt in range(max_retries + 1):
@@ -443,6 +443,9 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
                     agent_count=len(agent_names),
                     total_duration_ms=int((time_mod.time() - start) * 1000),
                     error_summary=str(e)[:500],
+                    trace_file_path=os.path.join(
+                        session.workspace_path or "", "trace.json"
+                    ) if session and session.workspace_path else "",
                     started_at=datetime.fromtimestamp(start),
                     completed_at=datetime.now(),
                 )

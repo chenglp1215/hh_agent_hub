@@ -174,7 +174,22 @@ class DockerReasonixRunner:
             "compact_ratio": settings.compact_ratio,
         }
         if settings.extra_json and isinstance(settings.extra_json, dict):
-            merged.update(settings.extra_json)
+            extra = settings.extra_json
+            # 支持扁平化的权限/沙箱配置：自动提取到嵌套结构
+            if "permissions" not in extra:
+                perm_keys = {"mode", "allow", "deny", "ask"}
+                perm_data = {k: extra[k] for k in perm_keys if k in extra}
+                if perm_data:
+                    merged["permissions"] = perm_data
+            if "sandbox" not in extra:
+                sand_keys = {"bash", "network"}
+                sand_data = {k: extra[k] for k in sand_keys if k in extra}
+                if sand_data:
+                    merged["sandbox"] = sand_data
+            # 其他 extra 字段直接合并
+            other = {k: v for k, v in extra.items()
+                     if k not in ("mode", "allow", "deny", "ask", "bash", "network")}
+            merged.update(other)
 
         # Per-agent overrides (only non-None values)
         for key in ("api_key", "base_url", "model", "temperature", "max_turns",

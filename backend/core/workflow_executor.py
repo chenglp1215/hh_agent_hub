@@ -245,14 +245,14 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
                                 agent=agent_name, output=output_str[:500],
                             )
 
-                    for k, v in intermediate.items():
-                        if not k.startswith("_"):
-                            final_answer = str(v)
-
-                    # 处理 supervisor 直接回复（如问候语短路），final_answer 在 update 而非 intermediate
+                    # 优先使用 supervisor 显式设置的 final_answer
                     direct_answer = update.get("final_answer")
-                    if not final_answer and direct_answer:
+                    if direct_answer:
                         final_answer = str(direct_answer)
+                    else:
+                        for k, v in intermediate.items():
+                            if not k.startswith("_"):
+                                final_answer = str(v)
 
             if final_answer:
                 await task_queue.publish_event(task_id, "text", content=final_answer)

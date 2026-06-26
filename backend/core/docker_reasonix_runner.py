@@ -41,8 +41,7 @@ def _build_reasonix_toml(config: Dict[str, Any], api_key_env: str = "DEEPSEEK_AP
     agent_section = {}
     if config.get("temperature") is not None:
         agent_section["temperature"] = config["temperature"]
-    if config.get("auto_plan") is not None:
-        agent_section['auto_plan'] = f'"{_toml_escape(config["auto_plan"])}"'
+    agent_section['auto_plan'] = f'"{_toml_escape(config.get("auto_plan", "on"))}"'
     if config.get("reasoning_language") is not None:
         agent_section['reasoning_language'] = f'"{_toml_escape(config["reasoning_language"])}"'
     if config.get("soft_compact_ratio") is not None:
@@ -464,8 +463,7 @@ class DockerReasonixRunner:
             # 不再删除 reasonix.toml，改为复制到 logs/ 目录保留用于调试
             if toml_path is not None:
                 try:
-                    _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                    _log_dir = os.path.join(_project_root, "logs")
+                    _log_dir = os.environ.get("AGENT_CALL_LOG_DIR", "/logs")
                     os.makedirs(_log_dir, exist_ok=True)
                     _timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     _dest = os.path.join(_log_dir, f"reasonix_{self.agent_name}_{_timestamp}.toml")

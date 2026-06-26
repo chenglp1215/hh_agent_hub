@@ -141,45 +141,9 @@ class AgentNodeFactory:
         skill_tools, skill_summary = self._load_skill_tools(agent_config.get("skills", []))
         tools.extend(skill_tools)
 
-        # 4. 构建完整 System Prompt（skill 摘要 + routing 指令）
+        # 4. 构建完整 System Prompt
         base_prompt = agent_config.get("system_prompt", "")
         full_prompt = base_prompt + "\n\n" + skill_summary if skill_summary else base_prompt
-
-        # 4a. Supervisor 路由指令注入
-        available_workers = agent_config.get("_available_workers", [])
-        worker_descriptions = agent_config.get("_worker_descriptions", {})
-        routing_instruction = ""
-        if available_workers:
-            lines = []
-            for name in available_workers:
-                desc = worker_descriptions.get(name, "")
-                line = f"- {name}" + (f" — {desc}" if desc else "")
-                lines.append(line)
-            worker_list = "\n".join(lines)
-            routing_instruction = (
-                f"\n\n---\n"
-                f"你是工作流调度主管，你**没有**任何工具（MCP、Skill等），你**不能**直接执行操作。\n"
-                f"你的唯一职责是分析用户问题，然后路由到合适的子代理执行。\n\n"
-                f"可用的子代理：\n{worker_list}\n\n"
-                f"调度规则：\n"
-                f"1. **仅限打招呼/闲聊**：如「你好」「hello」「在吗」等，直接回复并输出 NEXT_AGENT: end\n"
-                f"2. **其他所有问题**：必须选择一个最合适的子代理，输出 NEXT_AGENT: <名称>。"
-                f"即使你觉得自己能回答，也不要自己回答，必须路由给子代理。\n"
-                f"3. **路由时写完整的任务描述**：以主管身份给子代理写一份完整的任务描述。"
-                f"子代理是独立的 agent，只看到你写的内容，看不到用户原始消息。"
-                f"任务描述要包含用户需求背景、具体要做什么（不要提及子代理名称）。\n"
-                f"4. 子代理返回结果后，将结果整理后回复用户，并输出 NEXT_AGENT: end\n"
-                f"5. 不要重复调用同一个子代理处理相同的问题\n"
-                f"6. **绝对不要**在回复中使用 <mcp_call> 或任何工具调用标签，你没有工具\n\n"
-                f"格式示例：\n"
-                f"用户想查询代码中的数据库配置，需要代码分析能力。交给 mdr-code-analysze 执行。\n"
-                f"NEXT_AGENT: mdr-code-analysze\n\n"
-                f"在回复的最后，单独用一行标明路由决策，格式如下：\n"
-                f"NEXT_AGENT: <代理名称>\n"
-                f"或\n"
-                f"NEXT_AGENT: end"
-            )
-            full_prompt += routing_instruction
 
         # 5. 创建 ReAct Agent
         react_agent = create_react_agent(
@@ -211,8 +175,6 @@ class AgentNodeFactory:
                 injected_prompt = await knowledge_injector.inject(kb_ids, user_input, base_prompt)
                 if skill_summary:
                     injected_prompt += "\n\n" + skill_summary
-                if routing_instruction:
-                    injected_prompt += routing_instruction
                 actual_prompt = injected_prompt
                 agent = create_react_agent(model=llm, tools=tools, state_modifier=SystemMessage(content=injected_prompt))
 

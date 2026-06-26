@@ -151,6 +151,12 @@ class WorkflowEngine:
 
             # 将前一轮 worker 的结果注入 messages，让 supervisor 感知到子代理已完成任务
             state_with_context = dict(state)
+            msgs = list(state.get("messages", []))
+
+            # 每轮注入轮次信息
+            remaining = max_supervisor_rounds - rounds
+            msgs.append({"role": "system", "content": f"当前第 {rounds + 1} 轮调度，剩余 {remaining} 轮，最多 {max_supervisor_rounds} 轮。"})
+
             worker_context_injected = False
             if rounds > 0:
                 worker_outputs = []
@@ -162,20 +168,22 @@ class WorkflowEngine:
                     worker_outputs.append(f"[{k} 的返回结果]:\n{str(v)[:3000]}")
                 if worker_outputs:
                     context_msg = "\n\n".join(worker_outputs)
-                    msgs = list(state.get("messages", []))
                     msgs.append({"role": "user", "content": f"以下子代理已完成任务，请根据返回结果判断是否已满足用户需求：\n\n{context_msg}"})
-                    state_with_context["messages"] = msgs
                     worker_context_injected = True
 
+            state_with_context["messages"] = msgs
+
             result = await supervisor_node(state_with_context)
-            # 清理注入的上下文消息，防止持久化到 session.messages 污染后续对话
-            if worker_context_injected:
-                out_msgs = result.get("messages", [])
-                if out_msgs:
-                    def _is_not_injected(m):
-                        content = m.get("content") if isinstance(m, dict) else getattr(m, "content", "")
-                        return content != f"以下子代理已完成任务，请根据返回结果判断是否已满足用户需求：\n\n{context_msg}"
-                    result["messages"] = [m for m in out_msgs if _is_not_injected(m)]
+            # 清理注入的上下文/轮次消息，防止持久化到 session.messages 污染后续对话
+            out_msgs = result.get("messages", [])
+            if out_msgs:
+                _injected_contents = {f"当前第 {rounds + 1} 轮调度，剩余 {remaining} 轮，最多 {max_supervisor_rounds} 轮。"}
+                if worker_context_injected:
+                    _injected_contents.add(f"以下子代理已完成任务，请根据返回结果判断是否已满足用户需求：\n\n{context_msg}")
+                def _is_not_injected(m):
+                    content = m.get("content") if isinstance(m, dict) else getattr(m, "content", "")
+                    return content not in _injected_contents
+                result["messages"] = [m for m in out_msgs if _is_not_injected(m)]
             trace = result.get("trace") or trace
             intermediate = result.get("intermediate_results") or {}
             intermediate["_supervisor_rounds"] = rounds + 1
@@ -213,10 +221,10 @@ class WorkflowEngine:
                     result["final_answer"] = cleaned
 
                 # 将 supervisor 的任务描述作为 worker 的输入（主管安排的独立任务）
+                # 子代理只看到主管整理的任务描述，看不到用户原始消息
                 if next_agent != "end" and cleaned:
-                    out_msgs = list(result.get("messages") or state.get("messages") or [])
-                    out_msgs.append({"role": "user", "content": cleaned})
-                    result["messages"] = out_msgs
+                    result["user_input"] = cleaned
+                    result["messages"] = [{"role": "user", "content": cleaned}]
             else:
                 result["next_agent"] = "end"
                 trace.append({"type": "supervisor_end", "round": rounds + 1, "reason": "no NEXT_AGENT marker"})

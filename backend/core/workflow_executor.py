@@ -94,6 +94,7 @@ async def build_workflow(session: Session, message: str) -> tuple:
     wf_config: Dict[str, Any] = {
         "flow_type": workflow.flow_type,
         "worker_agent_ids": agent_names,
+        "max_supervisor_rounds": workflow.max_supervisor_rounds,
     }
 
     if workflow.flow_type == "supervisor" and workflow.supervisor_agent_id:
@@ -129,7 +130,7 @@ async def build_workflow(session: Session, message: str) -> tuple:
                     f"- {n}: {worker_descriptions.get(n, '无描述')[:200]}"
                     for n in agent_names
                 ),
-                "max_iterations": 5,
+                "max_iterations": workflow.max_supervisor_rounds,
             }
             _rendered = render_prompt(
                 template_slug=sup_agent.supervisor_prompt_template or "free_route",

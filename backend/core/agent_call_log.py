@@ -166,8 +166,9 @@ class AgentCallLogger:
     # ------------------------------------------------------------------
 
     def _log_stderr(self, agent_name: str, message: str):
-        """写入 stderr，Docker 日志中可见"""
-        line = f"[AGENT: {agent_name}] {message}"
+        """写入 stderr，Docker 日志中可见。多行内容压缩为单行"""
+        oneline = message.replace("\n", " ")
+        line = f"[AGENT: {agent_name}] {oneline}"
         print(line, file=sys.stderr, flush=True)
 
     def _write_detail(self, record: Dict[str, Any]):

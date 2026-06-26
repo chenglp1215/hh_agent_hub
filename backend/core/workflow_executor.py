@@ -240,9 +240,20 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
                         output_key = f"{agent_name}:{output_str[:50]}"
                         if output_key not in seen_outputs:
                             seen_outputs.add(output_key)
+                            # 去掉 reasonix 的工具调用 XML 标签，只显示实际内容
+                            import re as _re
+                            _display = _re.sub(
+                                r'<invoke[^>]*>.*?</invoke>', '',
+                                output_str, flags=_re.DOTALL
+                            )
+                            _display = _re.sub(r'<parameter[^>]*>.*?</parameter>', '', _display, flags=_re.DOTALL)
+                            _display = _re.sub(r'—\s*turns:.*$', '', _display, flags=_re.MULTILINE)
+                            _display = _display.strip()
+                            if not _display:
+                                _display = output_str[-500:]  # fallback: last 500 chars
                             await task_queue.publish_event(
                                 task_id, "agent_result",
-                                agent=agent_name, output=output_str[:500],
+                                agent=agent_name, output=_display[:2000],
                             )
 
                     # 优先使用 supervisor 显式设置的 final_answer

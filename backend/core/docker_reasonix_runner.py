@@ -97,14 +97,15 @@ def _build_reasonix_toml(config: Dict[str, Any], api_key_env: str = "DEEPSEEK_AP
             escaped = ", ".join(f'"{_toml_escape(v)}"' for v in vals)
             parts.append(f'{list_key} = [{escaped}]')
 
-    # [sandbox] section — Docker 容器本身已是隔离环境，bash 不强制沙箱
-    sandbox = config.get("sandbox") if config.get("sandbox") else {"bash": "off", "network": True}
-    parts.append('')
-    parts.append('[sandbox]')
-    if sandbox.get("bash") is not None:
-        parts.append(f'bash    = "{_toml_escape(sandbox["bash"])}"')
-    if sandbox.get("network") is not None:
-        parts.append(f'network = {"true" if sandbox["network"] else "false"}')
+    # [sandbox] section — 只在用户显式配置时才写入，否则用 reasonix 默认值
+    sandbox = config.get("sandbox")
+    if sandbox and isinstance(sandbox, dict):
+        parts.append('')
+        parts.append('[sandbox]')
+        if sandbox.get("bash") is not None:
+            parts.append(f'bash    = "{_toml_escape(sandbox["bash"])}"')
+        if sandbox.get("network") is not None:
+            parts.append(f'network = {"true" if sandbox["network"] else "false"}')
 
     # API key env reference
     parts.append('')

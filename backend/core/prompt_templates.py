@@ -400,23 +400,28 @@ NEXT_AGENT: end
 
 
 def render_prompt(template_slug: str, variables: Dict[str, Any],
-                  custom_override: Optional[str] = None) -> str:
+                  custom_override: Optional[str] = None,
+                  supplement: Optional[str] = None) -> str:
     """渲染 Prompt 模板
 
     Args:
         template_slug: 模板 slug（如 "free_route"）
         variables: 模板变量字典，包含 worker_list, worker_descriptions, max_iterations
         custom_override: 自定义覆盖内容（如果非空，直接返回此内容）
+        supplement: 补充 prompt，追加到模板末尾（不覆盖模板）
 
     Returns:
         渲染后的 system_prompt
     """
     if custom_override:
-        return custom_override
+        base = custom_override
+    else:
+        template = DEFAULT_PROMPT_TEMPLATES.get(template_slug)
+        if not template:
+            template = DEFAULT_PROMPT_TEMPLATES["free_route"]
+        base = template["system_prompt"].format(**variables)
 
-    template = DEFAULT_PROMPT_TEMPLATES.get(template_slug)
-    if not template:
-        # fallback 到 free_route
-        template = DEFAULT_PROMPT_TEMPLATES["free_route"]
+    if supplement:
+        base = base + "\n\n## 补充说明\n" + supplement
 
-    return template["system_prompt"].format(**variables)
+    return base

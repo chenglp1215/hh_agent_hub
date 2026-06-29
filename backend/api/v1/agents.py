@@ -104,6 +104,7 @@ async def create_agent(body: AgentCreate, user=Depends(get_current_user)):
         knowledge_base_ids=body.kb_ids,
         supervisor_prompt_template=body.supervisor_prompt_template,
         custom_prompt_override=body.custom_prompt_override,
+        supervisor_prompt_supplement=body.supervisor_prompt_supplement,
         created_by=user,
     )
 
@@ -134,7 +135,7 @@ async def update_agent(agent_id: int, body: AgentUpdate, user=Depends(get_curren
     updatable = ["display_name", "description", "role", "agent_type",
                  "llm_config_id", "llm_config", "http_config", "claudecode_config",
                  "a2a_config", "reasonix_config", "system_prompt", "status",
-                 "supervisor_prompt_template"]
+                 "supervisor_prompt_template", "supervisor_prompt_supplement"]
     for field in updatable:
         val = getattr(body, field, None)
         if val is not None:
@@ -294,6 +295,7 @@ async def copy_agent(agent_id: int, user=Depends(get_current_user)):
         knowledge_base_ids=a.knowledge_base_ids,
         supervisor_prompt_template=a.supervisor_prompt_template,
         custom_prompt_override=a.custom_prompt_override,
+        supervisor_prompt_supplement=a.supervisor_prompt_supplement,
         created_by=user,
     )
 

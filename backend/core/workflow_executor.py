@@ -136,6 +136,7 @@ async def build_workflow(session: Session, message: str) -> tuple:
                 template_slug=sup_agent.supervisor_prompt_template or "free_route",
                 variables=_variables,
                 custom_override=sup_agent.custom_prompt_override,
+                supplement=sup_agent.supervisor_prompt_supplement,
             )
             sup_config["system_prompt"] = _rendered
 

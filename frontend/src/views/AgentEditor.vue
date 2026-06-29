@@ -73,6 +73,12 @@
               自定义 Prompt 将覆盖默认模板，仅管理员可设置
             </div>
           </a-form-item>
+          <a-form-item label="Prompt 补充说明">
+            <a-textarea v-model:value="supervisorPromptSupplement" :rows="3" placeholder="对最终工作总结的补充说明、额外的输出格式要求等..." />
+            <div class="text-xs text-[#535b6e] mt-1">
+              补充内容将追加到 Prompt 末尾，不会覆盖模板。可用于对工作总结内容、输出格式等进行额外说明
+            </div>
+          </a-form-item>
         </template>
 
         <a-form-item label="描述">
@@ -294,6 +300,7 @@ const form = ref<any>({
 const userStore = useUserStore()
 const supervisorPromptTemplate = ref('free_route')
 const customPromptOverride = ref('')
+const supervisorPromptSupplement = ref('')
 const llmConfig = ref<any>({
   provider: 'openai',
   model: 'gpt-4o-mini',
@@ -400,6 +407,7 @@ async function loadAgent() {
     }
     supervisorPromptTemplate.value = d.supervisor_prompt_template || 'free_route'
     customPromptOverride.value = d.custom_prompt_override || ''
+    supervisorPromptSupplement.value = d.supervisor_prompt_supplement || ''
     if (d.llm_config_id) {
       llmMode.value = 'select'
       llmConfigId.value = d.llm_config_id
@@ -495,6 +503,7 @@ function buildFormData() {
   data.skill_ids = selectedSkillIds.value
   data.supervisor_prompt_template = supervisorPromptTemplate.value
   data.custom_prompt_override = customPromptOverride.value || null
+  data.supervisor_prompt_supplement = supervisorPromptSupplement.value || null
   return data
 }
 

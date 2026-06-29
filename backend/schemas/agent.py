@@ -20,6 +20,7 @@ class AgentCreate(BaseModel):
     skill_ids: List[int] = []
     supervisor_prompt_template: Optional[str] = "free_route"
     custom_prompt_override: Optional[str] = None
+    supervisor_prompt_supplement: Optional[str] = None
 
 
 class AgentUpdate(BaseModel):
@@ -40,6 +41,7 @@ class AgentUpdate(BaseModel):
     status: Optional[str] = None
     supervisor_prompt_template: Optional[str] = None
     custom_prompt_override: Optional[str] = None
+    supervisor_prompt_supplement: Optional[str] = None
 
 
 class AgentTestRequest(BaseModel):

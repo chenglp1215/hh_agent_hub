@@ -39,6 +39,7 @@ async def list_agents(
             "agent_type": a.agent_type, "status": a.status,
             "resource_count": {"mcp": mcp_count, "kb": kb_count, "skills": skill_count},
             "supervisor_prompt_template": a.supervisor_prompt_template,
+            "supervisor_prompt_supplement": a.supervisor_prompt_supplement,
             "custom_prompt_override": a.custom_prompt_override,
             "created_at": a.created_at.isoformat() if a.created_at else None,
             "updated_at": a.updated_at.isoformat() if a.updated_at else None,

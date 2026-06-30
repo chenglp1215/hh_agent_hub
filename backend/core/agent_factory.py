@@ -157,7 +157,13 @@ class AgentNodeFactory:
             import time as time_mod
             t0 = time_mod.time()
             user_input = state.get("user_input", "")
-            logger.info(f"[Agent: {agent_name}] 开始执行，输入长度={len(user_input)}")
+            # 上下文日志：展示 agent 收到的消息
+            _ctx = []
+            for m in state.get("messages", []):
+                c = getattr(m, "content", "") if hasattr(m, "content") else (m.get("content", "") if isinstance(m, dict) else "")
+                c = str(c)[:60].replace("\n", " ")
+                _ctx.append(f"\"{c}...\"" if len(str(c)) > 60 else f"\"{c}\"")
+            logger.info(f"[Agent: {agent_name}] 上下文: [{', '.join(_ctx)}]")
 
             # Agent call logging: trace context
             _trace_id = state.get("_trace_id", "")
@@ -247,7 +253,8 @@ class AgentNodeFactory:
             intermediate[agent_name] = output
 
             elapsed = int((time_mod.time() - t0) * 1000)
-            logger.info(f"[Agent: {agent_name}] 执行完成，输出长度={len(output)}，耗时={elapsed}ms")
+            _out_preview = output[:150].replace("\n", " ") if output else ""
+            logger.info(f"[Agent: {agent_name}] 结果: {_out_preview}... | 耗时={elapsed}ms")
             trace.append({
                 "type": "agent_end", "agent": agent_name,
                 "output_len": len(output), "elapsed_ms": elapsed,

@@ -188,17 +188,19 @@ class WorkflowEngine:
 
             state_with_context["messages"] = msgs
 
-            # 简洁上下文日志
-            _roles = {}
+            # 上下文日志：按消息顺序展示内容摘要
+            _ctx_parts = []
             for m in msgs:
-                r = m.get("role", "?") if isinstance(m, dict) else "?"
-                _roles[r] = _roles.get(r, 0) + 1
-            _parts = [f"{r}:{c}" for r, c in sorted(_roles.items())]
-            logger.info(
-                f"[Supervisor: {supervisor_name}] 上下文: {' | '.join(_parts)}"
-                f" | 总{len(msgs)}条"
-                f"{' | 原始需求:' + str(len(orig)) + '字' if orig else ''}"
-            )
+                c = str(m.get("content", "")) if isinstance(m, dict) else ""
+                if c.startswith("【用户原始需求】"):
+                    _ctx_parts.append("原始需求")
+                elif c.startswith("以下子代理已完成任务"):
+                    _ctx_parts.append("Worker结果")
+                elif c.startswith("当前第"):
+                    _ctx_parts.append("轮次")
+                else:
+                    _ctx_parts.append(f"\"{c[:40]}...\"" if len(c) > 40 else f"\"{c}\"")
+            logger.info(f"[Supervisor: {supervisor_name}] 上下文: [{', '.join(_ctx_parts)}]")
 
             result = await supervisor_node(state_with_context)
             # 清理注入的上下文/轮次消息，防止持久化到 session.messages 污染后续对话
@@ -238,7 +240,6 @@ class WorkflowEngine:
                     trace.append({"type": "supervisor_route", "round": rounds + 1, "target": next_agent})
 
                 result["next_agent"] = next_agent
-                logger.info(f"[Supervisor: {supervisor_name}] 路由决策: {result['next_agent']}")
                 cleaned = re.sub(
                     r'^NEXT_AGENT:\s*.+$\n?', '', output, flags=re.MULTILINE
                 ).strip()
@@ -249,11 +250,19 @@ class WorkflowEngine:
                 if next_agent == "end" and cleaned:
                     result["final_answer"] = cleaned
 
-                # 将 supervisor 的任务描述作为 worker 的输入（主管安排的独立任务）
-                # 子代理只看到主管整理的任务描述，看不到用户原始消息
+                # 将 supervisor 的任务描述作为 worker 的输入
                 if next_agent != "end" and cleaned:
                     result["user_input"] = cleaned
                     result["messages"] = [{"role": "user", "content": cleaned}]
+
+                # 日志：结果摘要 + 路由决策
+                _out_preview = str(output)[:120].replace("\n", " ")
+                _task_preview = (cleaned or "")[:80].replace("\n", " ")
+                if next_agent == "end":
+                    logger.info(f"[Supervisor: {supervisor_name}] 完成: {_out_preview}...")
+                else:
+                    logger.info(f"[Supervisor: {supervisor_name}] 结果: {_out_preview}...")
+                    logger.info(f"[Supervisor: {supervisor_name}] 路由决策: {next_agent}, 任务描述: {_task_preview}")
             else:
                 result["next_agent"] = "end"
                 trace.append({"type": "supervisor_end", "round": rounds + 1, "reason": "no NEXT_AGENT marker"})

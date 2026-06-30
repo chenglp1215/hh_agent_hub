@@ -154,6 +154,12 @@ class WorkflowEngine:
             state_with_context = dict(state)
             msgs = list(state.get("messages", []))
 
+            # 注入原始用户需求作为第一条 user 消息，仅供 supervisor 感知完整计划
+            # Worker 节点从 result["messages"] 获取消息，不会包含此注入
+            orig = state.get("_original_user_input", "")
+            if orig:
+                msgs.insert(0, {"role": "user", "content": f"【用户原始需求】{orig}"})
+
             # 每轮注入轮次信息
             remaining = max_supervisor_rounds - rounds
             msgs.append({"role": "system", "content": f"当前第 {rounds + 1} 轮调度，剩余 {remaining} 轮，最多 {max_supervisor_rounds} 轮。"})
@@ -225,13 +231,7 @@ class WorkflowEngine:
                 # 子代理只看到主管整理的任务描述，看不到用户原始消息
                 if next_agent != "end" and cleaned:
                     result["user_input"] = cleaned
-                    # 保留原始用户需求供 supervisor 感知完整计划，worker 只看到当前任务描述
-                    orig = state.get("_original_user_input", "")
-                    msgs_for_next = []
-                    if orig:
-                        msgs_for_next.append({"role": "user", "content": f"【用户原始需求】{orig}"})
-                    msgs_for_next.append({"role": "user", "content": cleaned})
-                    result["messages"] = msgs_for_next
+                    result["messages"] = [{"role": "user", "content": cleaned}]
             else:
                 result["next_agent"] = "end"
                 trace.append({"type": "supervisor_end", "round": rounds + 1, "reason": "no NEXT_AGENT marker"})
@@ -239,24 +239,9 @@ class WorkflowEngine:
             result["intermediate_results"] = intermediate
             result["trace"] = trace
 
-            # --- Agent call logging & trace propagation ---
+            # --- Trace context propagation ---
+            # agent_node 已记录完整日志（system_prompt/input/output/token），此处仅传播 trace 上下文
             if _trace_id:
-                elapsed = int((time_mod.time() - t0) * 1000)
-                agent_call_logger.log_agent_call(
-                    trace_id=_trace_id,
-                    parent_span_id=_parent_span_id,
-                    span_id=_span_id,
-                    agent_name=supervisor_name,
-                    agent_type="supervisor",
-                    user_input=str(state.get("user_input", "")),
-                    output=output,
-                    duration_ms=elapsed,
-                    metadata={
-                        "round": rounds + 1,
-                        "routing_decision": result.get("next_agent", "end"),
-                    },
-                )
-                # Propagate trace context to worker
                 result["_trace_id"] = _trace_id
                 result["_parent_span_id"] = _span_id
 

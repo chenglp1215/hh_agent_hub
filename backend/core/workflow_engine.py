@@ -185,6 +185,14 @@ class WorkflowEngine:
 
             state_with_context["messages"] = msgs
 
+            # 日志：展示 supervisor 实际收到的完整上下文
+            _summary = []
+            for i, m in enumerate(msgs):
+                role = m.get("role", "?")
+                preview = str(m.get("content", ""))[:100].replace("\n", " ")
+                _summary.append(f"[{i}] {role}: {preview}...")
+            logger.info(f"[Supervisor: {supervisor_name}] 上下文消息（共{len(msgs)}条）:\n" + "\n".join(_summary))
+
             result = await supervisor_node(state_with_context)
             # 清理注入的上下文/轮次消息，防止持久化到 session.messages 污染后续对话
             out_msgs = result.get("messages", [])

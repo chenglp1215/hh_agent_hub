@@ -26,12 +26,12 @@ _ROUTING_FORMAT = """
 
 示例1（调度子代理）：
 ```json
-{{"text": "确认第1项已完成，现在调度MDR-运维管理执行第2项。", "next_agent": "MDR-运维管理", "next_agent_msg": "检查线上k8s集群namespace为psso的各个pod运行状态，重点关注mdr-command和mdr-worker下各容器状态是否正常。"}}}
+{{"text": "确认第1项已完成，现在调度MDR-运维管理执行第2项。", "next_agent": "MDR-运维管理", "next_agent_msg": "检查线上k8s集群namespace为psso的各个pod运行状态，重点关注mdr-command和mdr-worker下各容器状态是否正常。"}}
 ```
 
 示例2（全部完成）：
 ```json
-{{"text": "所有巡检步骤已完成。1.事件处置时间正常 2.Pod状态全部Running 3.日志正常更新 4.无需重启。", "next_agent": "end", "next_agent_msg": ""}}}
+{{"text": "所有巡检步骤已完成。1.事件处置时间正常 2.Pod状态全部Running 3.日志正常更新 4.无需重启。", "next_agent": "end", "next_agent_msg": ""}}
 ```"""
 
 DEFAULT_PROMPT_TEMPLATES: Dict[str, Dict[str, str]] = {

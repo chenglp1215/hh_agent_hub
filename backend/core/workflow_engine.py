@@ -229,7 +229,7 @@ class WorkflowEngine:
                     orig = state.get("_original_user_input", "")
                     msgs_for_next = []
                     if orig:
-                        msgs_for_next.append({"role": "system", "content": f"用户原始需求：{orig}"})
+                        msgs_for_next.append({"role": "user", "content": f"【用户原始需求】{orig}"})
                     msgs_for_next.append({"role": "user", "content": cleaned})
                     result["messages"] = msgs_for_next
             else:

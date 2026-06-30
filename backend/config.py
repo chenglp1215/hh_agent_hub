@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "./logs/app.log"
 
-    AGENT_LOG_LEVEL: str = "verbose"
+    AGENT_LOG_LEVEL: str = "basic"
 
     BASE_DIR: Path = Path(__file__).resolve().parent
 

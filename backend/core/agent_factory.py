@@ -274,6 +274,7 @@ class AgentNodeFactory:
                 "trace": trace,
                 "_trace_id": _trace_id,
                 "_parent_span_id": _span_id,
+                "_original_user_input": state.get("_original_user_input", ""),
             }
 
         return agent_node

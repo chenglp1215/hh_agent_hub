@@ -395,7 +395,6 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
                         te = await TriggerExecution.filter(task_id=task_id).first()
                         if trigger and te:
                             from core.trigger_notifier import send_trigger_notification
-                            import asyncio
                             asyncio.create_task(send_trigger_notification(trigger, te))
             except Exception as notify_err:
                 logger.warning(f"Failed to send trigger notification: {notify_err}")
@@ -465,7 +464,6 @@ async def execute_task(task: Dict[str, Any], task_queue: TaskQueue):
                         te = await TriggerExecution.filter(task_id=task_id).first()
                         if trigger and te:
                             from core.trigger_notifier import send_trigger_notification
-                            import asyncio
                             asyncio.create_task(send_trigger_notification(trigger, te))
             except Exception as notify_err:
                 logger.warning(f"Failed to send trigger notification: {notify_err}")

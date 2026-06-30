@@ -188,8 +188,9 @@ class WorkflowEngine:
             # 日志：展示 supervisor 实际收到的完整上下文
             _summary = []
             for i, m in enumerate(msgs):
-                role = m.get("role", "?")
-                preview = str(m.get("content", ""))[:100].replace("\n", " ")
+                role = getattr(m, "type", "?") if hasattr(m, "type") else (m.get("role", "?") if isinstance(m, dict) else "?")
+                content = getattr(m, "content", "") if hasattr(m, "content") else (m.get("content", "") if isinstance(m, dict) else "")
+                preview = str(content)[:100].replace("\n", " ")
                 _summary.append(f"[{i}] {role}: {preview}...")
             logger.info(f"[Supervisor: {supervisor_name}] 上下文消息（共{len(msgs)}条）:\n" + "\n".join(_summary))
 

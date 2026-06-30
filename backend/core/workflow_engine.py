@@ -220,51 +220,84 @@ class WorkflowEngine:
             intermediate["_supervisor_rounds"] = rounds + 1
             output = intermediate.get(supervisor_name, "")
 
-            match = re.search(r'^NEXT_AGENT:\s*(.+)$', output, re.MULTILINE)
-            if match:
-                raw = match.group(1).strip()
+            import json as _json
+            parsed = None
+            # 尝试 JSON 解析，失败则回退到正则
+            try:
+                _output_clean = output.strip()
+                # 处理 LLM 可能在 JSON 外层包裹 ```json ... ``` 的情况
+                if _output_clean.startswith("```"):
+                    _lines = _output_clean.split("\n")
+                    _output_clean = "\n".join(_lines[1:-1] if _lines[-1].strip() == "```" else _lines[1:])
+                parsed = _json.loads(_output_clean)
+            except Exception:
+                pass
+
+            if parsed and isinstance(parsed, dict) and "next_agent" in parsed:
+                raw = str(parsed.get("next_agent", "end")).strip()
                 next_agent = "end" if raw.lower() == "end" else raw
+                text = str(parsed.get("text", output))
+                worker_msg = str(parsed.get("next_agent_msg", ""))
 
                 # 校验目标 Agent 是否存在
                 if next_agent != "end" and next_agent not in agent_nodes:
                     logger.warning(f"[Supervisor: {supervisor_name}] 指向不存在的 Agent: {next_agent}，回退到 END")
-                    trace.append({
-                        "type": "routing_correction",
-                        "round": rounds + 1,
-                        "original_target": next_agent,
-                        "actual_target": "end",
-                        "reason": "target_not_found"
-                    })
                     next_agent = "end"
+                    trace.append({"type": "routing_correction", "round": rounds + 1, "original_target": next_agent, "actual_target": "end", "reason": "target_not_found"})
                 else:
                     trace.append({"type": "supervisor_route", "round": rounds + 1, "target": next_agent})
 
                 result["next_agent"] = next_agent
-                cleaned = re.sub(
-                    r'^NEXT_AGENT:\s*.+$\n?', '', output, flags=re.MULTILINE
-                ).strip()
-                if cleaned:
-                    intermediate[supervisor_name] = cleaned
+                if text:
+                    intermediate[supervisor_name] = text
 
-                # 路由到 end 时，cleaned 内容就是最终回复
-                if next_agent == "end" and cleaned:
-                    result["final_answer"] = cleaned
+                if next_agent == "end" and text:
+                    result["final_answer"] = text
 
-                # 将 supervisor 的任务描述作为 worker 的输入
-                if next_agent != "end" and cleaned:
-                    result["user_input"] = cleaned
-                    result["messages"] = [{"role": "user", "content": cleaned}]
+                # worker 的输入来自 next_agent_msg，如果没有则回退到 text
+                if next_agent != "end":
+                    result["user_input"] = worker_msg or text
+                    result["messages"] = [{"role": "user", "content": worker_msg or text}]
 
-                # 日志：路由决策（agent_node 已记录完整结果，此处不重复）
-                _task_preview = (cleaned or "")[:80].replace("\n", " ")
+                _task_preview = (worker_msg or text)[:80].replace("\n", " ")
                 if next_agent == "end":
                     logger.info(f"[Supervisor: {supervisor_name}] 完成")
                 else:
                     logger.info(f"[Supervisor: {supervisor_name}] 路由决策: {next_agent}, 任务描述: {_task_preview}")
+
             else:
-                result["next_agent"] = "end"
-                trace.append({"type": "supervisor_end", "round": rounds + 1, "reason": "no NEXT_AGENT marker"})
-                logger.warning(f"[Supervisor: {supervisor_name}] 未找到 NEXT_AGENT 标记，结束工作流")
+                # 回退：正则匹配 NEXT_AGENT（兼容旧格式）
+                match = re.search(r'^NEXT_AGENT:\s*(.+)$', output, re.MULTILINE)
+                if match:
+                    raw = match.group(1).strip()
+                    next_agent = "end" if raw.lower() == "end" else raw
+
+                    if next_agent != "end" and next_agent not in agent_nodes:
+                        logger.warning(f"[Supervisor: {supervisor_name}] 指向不存在的 Agent: {next_agent}，回退到 END")
+                        next_agent = "end"
+                        trace.append({"type": "routing_correction", "round": rounds + 1, "original_target": next_agent, "actual_target": "end", "reason": "target_not_found"})
+                    else:
+                        trace.append({"type": "supervisor_route", "round": rounds + 1, "target": next_agent})
+
+                    result["next_agent"] = next_agent
+                    cleaned = re.sub(r'^NEXT_AGENT:\s*.+$\n?', '', output, flags=re.MULTILINE).strip()
+                    if cleaned:
+                        intermediate[supervisor_name] = cleaned
+                    if next_agent == "end" and cleaned:
+                        result["final_answer"] = cleaned
+                    if next_agent != "end" and cleaned:
+                        result["user_input"] = cleaned
+                        result["messages"] = [{"role": "user", "content": cleaned}]
+
+                    _task_preview = (cleaned or "")[:80].replace("\n", " ")
+                    if next_agent == "end":
+                        logger.info(f"[Supervisor: {supervisor_name}] 完成")
+                    else:
+                        logger.info(f"[Supervisor: {supervisor_name}] 路由决策: {next_agent}, 任务描述: {_task_preview}")
+                else:
+                    result["next_agent"] = "end"
+                    trace.append({"type": "supervisor_end", "round": rounds + 1, "reason": "no NEXT_AGENT marker"})
+                    logger.warning(f"[Supervisor: {supervisor_name}] 未找到路由标记，结束工作流")
             result["intermediate_results"] = intermediate
             result["trace"] = trace
 

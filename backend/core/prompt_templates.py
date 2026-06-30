@@ -9,15 +9,30 @@
 
 from typing import Dict, Any, Optional
 
-# 所有模板共用的路由格式指令
+# 所有模板共用的路由格式指令（JSON 格式）
 _ROUTING_FORMAT = """
-## 路由格式
+## 返回格式
 
-当需要调用子代理时，在回复最后一行输出：
-NEXT_AGENT: <代理名称>
+你必须**只返回**一个 JSON 对象，不要返回任何其他内容：
 
-任务完成时输出：
-NEXT_AGENT: end"""
+```json
+{"text": "<你的文字输出>", "next_agent": "<代理名称或end>", "next_agent_msg": "<给子代理的任务描述>"}
+```
+
+字段说明：
+- **text**: 你的文字输出（对用户的回复、汇总结果、思考过程等）
+- **next_agent**: 下一个要调度的代理名称，全部完成时填 `end`
+- **next_agent_msg**: 仅当 next_agent 不为 `end` 时填写——这是给下一个子代理的**精确任务描述**，只写需要它做的这一件事，不要包含你的思考过程、不要写"好的，已完成xxx，接下来xxx"。子代理通过这个字段接收任务。当 next_agent 为 `end` 时此字段填空字符串 `""`
+
+示例1（调度子代理）：
+```json
+{"text": "确认第1项已完成，现在调度MDR-运维管理执行第2项。", "next_agent": "MDR-运维管理", "next_agent_msg": "检查线上k8s集群namespace为psso的各个pod运行状态，重点关注mdr-command和mdr-worker下各容器状态是否正常。"}
+```
+
+示例2（全部完成）：
+```json
+{"text": "所有巡检步骤已完成。1.事件处置时间正常 2.Pod状态全部Running 3.日志正常更新 4.无需重启。", "next_agent": "end", "next_agent_msg": ""}
+```"""
 
 DEFAULT_PROMPT_TEMPLATES: Dict[str, Dict[str, str]] = {
     "free_route": {
@@ -50,70 +65,46 @@ DEFAULT_PROMPT_TEMPLATES: Dict[str, Dict[str, str]] = {
 
     **任务描述只写当前需要子代理做的这一件事，不要列举用户的其他需求。**子代理只需专注当前任务。
 
-### 规则3：路由决策在最后一行
-格式：
-
-```
-[整理后的任务描述]
-NEXT_AGENT: <代理名称>
-```
+### 规则3：返回 JSON 格式
+你必须**只返回**一个 JSON 对象，不要返回任何其他文字。子代理通过 `next_agent_msg` 字段接收任务，你的思考过程写在 `text` 中即可。
 
 ### 规则4：审查结果 → 决定结束或继续
 - 子代理返回后，对照【用户原始需求】逐项检查是否所有需求点都已满足
-- **逐项检查的"项"指的是【用户原始需求】中用户列出的每一项，不是你自创的子步骤。禁止自行拆分用户的需求项。**
+- **逐项检查的"项"指的是【用户原始需求】中的每一项，不是你自创的子步骤。禁止自行拆分用户的需求项。**
 - **当前步骤完成 ≠ 用户全部需求完成**，只要原需求中还有任何一项未完成就必须继续调度
-- 全部需求均已满足 → 汇总结果：
-
-  ```
-  [汇总的最终结果]
-  NEXT_AGENT: end
-  ```
-- 仍有需求未满足 → 继续路由到下一个子代理，附上已完成步骤的上下文
+- 全部需求均已满足 → `next_agent` 填 `"end"`，`next_agent_msg` 填空字符串
+- 仍有需求未满足 → `next_agent` 填下一个代理名，`next_agent_msg` 填精确任务描述
 
 ### 规则5：轮次控制
 - 最多 {max_iterations} 轮
-- 达到上限时，汇总已有结果，输出 NEXT_AGENT: end
+- 达到上限时，汇总已有结果，`next_agent` 填 `"end"`
 
 ## 输出示例
 
-正确（直接整理需求）：
-
-```
-用户想分析当前项目的代码中是否存在 SQL 注入漏洞。
-NEXT_AGENT: mdr-code-analysze
+正确（调度子代理）：
+```json
+{"text": "确认第1项已完成，现在执行第2项检查Pod状态。", "next_agent": "MDR-运维管理", "next_agent_msg": "检查线上k8s集群namespace为psso的各个pod运行状态，重点关注mdr-command和mdr-worker下各容器状态是否正常。"}
 ```
 
-正确（多轮附加上下文）：
-
-```
-用户继续追问 SQL 注入问题。上一轮分析找到了3处风险，分别是：xxx,xxx,xxx 请继续深入分析这几处是否真正可被利用。
-NEXT_AGENT: mdr-code-analysze
+正确（全部完成）：
+```json
+{"text": "巡检结果汇总：1.事件处置时间正常 2.Pod状态全部Running 3.日志正常更新 4.无需重启。", "next_agent": "end", "next_agent_msg": ""}
 ```
 
 正确（纯问候）：
-
-```
-你好，我是研发任务调度主管，可以帮你调度子代理完成代码分析、审查等任务。
-NEXT_AGENT: end
+```json
+{"text": "你好，我是研发任务调度主管，可以帮你调度子代理完成代码分析、审查等任务。", "next_agent": "end", "next_agent_msg": ""}
 ```
 
-错误（直接将用户原话当任务描述）：
-
+错误（next_agent_msg 写了思考过程）：
+```json
+{"text": "...", "next_agent": "MDR-运维管理", "next_agent_msg": "好的，已确认第1项完成，接下来需要检查pod状态。请检查k8s集群中..."}
 ```
-为什么失败了？
-NEXT_AGENT: mdr-code-analysze
-```
-
-错误（写入了思考过程）：
-
-```
-用户这个问题涉及到编码部分，我需要调用代码分析角色进行处理这个问题：xxxxxx
-NEXT_AGENT: mdr-code-analysze
-```
+↑ next_agent_msg 中的"好的，已确认第1项完成，接下来需要"是思考过程，不应出现。
 
 ## 核心原则
 
-- 整理用户需求，根据上下文整理完整的单次子代理的任务描述
+- `text` 写你的思考和汇总，`next_agent_msg` 写给子代理的精确任务
 - 调度子代理，但不替它干活
 - 子代理知道该怎么做，相信它""" + _ROUTING_FORMAT
     },
@@ -156,58 +147,27 @@ NEXT_AGENT: mdr-code-analysze
 
 **重要：任务描述中只写当前这一步，禁止列出用户的全部步骤。**子代理只做当前这一步，不需要知道完整计划。
 
-### 规则5：路由决策在最后一行
-格式：
-
-```text
-[整理后的任务描述]
-NEXT_AGENT: <代理名称>
-```
+### 规则5：返回 JSON 格式
+你必须**只返回**一个 JSON 对象。`text` 写汇报内容，`next_agent` 填下一步代理或 `"end"`，`next_agent_msg` 填给子代理的任务描述。
 
 ### 规则6：轮次控制
-
-- 达到轮次上限时，汇总已有结果，输出
-
-  ```text
-  [最终结果]
-  NEXT_AGENT: end
-  ```
+- 达到轮次上限时，汇总已有结果，`next_agent` 填 `"end"`
 
 ## 输出示例
 
 正确（完成一步，等待确认）：
-
-```text
-已完成第一步：代码分析。发现3处SQL注入风险，详细报告已生成。
-NEXT_AGENT: end
+```json
+{"text": "已完成第一步：代码分析。发现3处SQL注入风险，详细报告已生成。", "next_agent": "end", "next_agent_msg": ""}
 ```
 
 正确（用户确认后执行下一步）：
-
-```text
-用户需求：继续执行第二步SQL注入修复。第一步分析发现了3处风险，分别是：xxx,xxx,xxx 请根据分析结果进行修复。
-NEXT_AGENT: mdr-code-fixer
-```
-
-正确（用户要求顺序执行）：
-
-```text
-用户需求：先分析代码，再审查安全，最后生成修复报告。当前执行第一步：代码分析。
-NEXT_AGENT: mdr-code-analysze
+```json
+{"text": "继续执行第二步SQL注入修复。", "next_agent": "mdr-code-fixer", "next_agent_msg": "第一步分析发现了3处SQL注入风险，请根据分析结果进行修复。风险如下：xxx,xxx,xxx"}
 ```
 
 错误（跳过步骤）：
-
-```text
-用户要求先分析再修复，分析发现没有风险，跳过修复步骤直接结束。
-NEXT_AGENT: end
-```
-
-错误（合并步骤）：
-
-```text
-执行分析和修复。
-NEXT_AGENT: mdr-code-analysze
+```json
+{"text": "分析没有风险，跳过修复。", "next_agent": "end", "next_agent_msg": ""}
 ```
 
 ## 核心原则

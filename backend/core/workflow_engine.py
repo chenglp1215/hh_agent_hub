@@ -225,7 +225,13 @@ class WorkflowEngine:
                 # 子代理只看到主管整理的任务描述，看不到用户原始消息
                 if next_agent != "end" and cleaned:
                     result["user_input"] = cleaned
-                    result["messages"] = [{"role": "user", "content": cleaned}]
+                    # 保留原始用户需求供 supervisor 感知完整计划，worker 只看到当前任务描述
+                    orig = state.get("_original_user_input", "")
+                    msgs_for_next = []
+                    if orig:
+                        msgs_for_next.append({"role": "system", "content": f"用户原始需求：{orig}"})
+                    msgs_for_next.append({"role": "user", "content": cleaned})
+                    result["messages"] = msgs_for_next
             else:
                 result["next_agent"] = "end"
                 trace.append({"type": "supervisor_end", "round": rounds + 1, "reason": "no NEXT_AGENT marker"})
@@ -254,6 +260,9 @@ class WorkflowEngine:
                 result["_trace_id"] = _trace_id
                 result["_parent_span_id"] = _span_id
 
+            # 保留原始用户需求，供 supervisor 跨轮次感知完整计划
+            if "_original_user_input" not in result:
+                result["_original_user_input"] = state.get("_original_user_input", "")
             return result
 
         graph.add_node("supervisor", supervisor_wrapper)

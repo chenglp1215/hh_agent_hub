@@ -152,6 +152,7 @@ async def build_workflow(session: Session, message: str) -> tuple:
         "session_id": session.id,
         "session_workspace": session.workspace_path or "",
         "task_id": "",  # 由 execute_task 设置
+        "_original_user_input": message,  # 保留原始需求，供 supervisor 跨轮次感知完整计划
     }
     return graph, initial_state, agent_names, workflow.flow_type
 

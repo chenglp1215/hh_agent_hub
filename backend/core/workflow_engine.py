@@ -153,8 +153,17 @@ class WorkflowEngine:
                     }
 
             # 将前一轮 worker 的结果注入 messages，让 supervisor 感知到子代理已完成任务
+            # 注意：过滤掉 tool 消息，Supervisor 不需要看 Worker 内部的工具调用细节
             state_with_context = dict(state)
-            msgs = list(state.get("messages", []))
+            raw_msgs = list(state.get("messages", []))
+            msgs = []
+            tool_count = 0
+            for m in raw_msgs:
+                role = getattr(m, "type", "") if hasattr(m, "type") else (m.get("role", "") if isinstance(m, dict) else "")
+                if role in ("tool",):
+                    tool_count += 1
+                    continue
+                msgs.append(m)
 
             # 每轮注入轮次信息
             remaining = max_supervisor_rounds - rounds
@@ -177,22 +186,23 @@ class WorkflowEngine:
                     logger.info(f"[Supervisor: {supervisor_name}] 注入 Worker 结果：{context_msg[:200]}...")
 
             # 注入原始用户需求作为最后一条消息，利用近因效应确保 Supervisor 不遗忘完整计划
-            # Worker 节点从 result["messages"] 获取消息，不会包含此注入
             orig = state.get("_original_user_input", "")
             if orig:
                 msgs.append({"role": "user", "content": f"【用户原始需求】{orig}"})
-                logger.info(f"[Supervisor: {supervisor_name}] 注入原始需求（长度={len(orig)}）")
 
             state_with_context["messages"] = msgs
 
-            # 日志：展示 supervisor 实际收到的完整上下文
-            _summary = []
-            for i, m in enumerate(msgs):
-                role = getattr(m, "type", "?") if hasattr(m, "type") else (m.get("role", "?") if isinstance(m, dict) else "?")
-                content = getattr(m, "content", "") if hasattr(m, "content") else (m.get("content", "") if isinstance(m, dict) else "")
-                preview = str(content)[:100].replace("\n", " ")
-                _summary.append(f"[{i}] {role}: {preview}...")
-            logger.info(f"[Supervisor: {supervisor_name}] 上下文消息（共{len(msgs)}条）:\n" + "\n".join(_summary))
+            # 简洁上下文日志
+            _roles = {}
+            for m in msgs:
+                r = getattr(m, "type", "") if hasattr(m, "type") else (m.get("role", "?") if isinstance(m, dict) else "?")
+                _roles[r] = _roles.get(r, 0) + 1
+            _parts = [f"{r}:{c}" for r, c in sorted(_roles.items())]
+            logger.info(
+                f"[Supervisor: {supervisor_name}] 上下文: {' | '.join(_parts)}"
+                f" | 总{len(msgs)}条（跳过tool:{tool_count}）"
+                f"{' | 原始需求:' + str(len(orig)) + '字' if orig else ''}"
+            )
 
             result = await supervisor_node(state_with_context)
             # 清理注入的上下文/轮次消息，防止持久化到 session.messages 污染后续对话

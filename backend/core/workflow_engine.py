@@ -153,17 +153,8 @@ class WorkflowEngine:
                     }
 
             # 将前一轮 worker 的结果注入 messages，让 supervisor 感知到子代理已完成任务
-            # 注意：过滤掉 tool 消息，Supervisor 不需要看 Worker 内部的工具调用细节
             state_with_context = dict(state)
-            raw_msgs = list(state.get("messages", []))
-            msgs = []
-            tool_count = 0
-            for m in raw_msgs:
-                role = getattr(m, "type", "") if hasattr(m, "type") else (m.get("role", "") if isinstance(m, dict) else "")
-                if role in ("tool",):
-                    tool_count += 1
-                    continue
-                msgs.append(m)
+            msgs = list(state.get("messages", []))
 
             # 每轮注入轮次信息
             remaining = max_supervisor_rounds - rounds
@@ -192,7 +183,7 @@ class WorkflowEngine:
 
             state_with_context["messages"] = msgs
 
-            # 简洁上下文日志
+            # 简洁上下文日志：按角色统计
             _roles = {}
             for m in msgs:
                 r = getattr(m, "type", "") if hasattr(m, "type") else (m.get("role", "?") if isinstance(m, dict) else "?")
@@ -200,7 +191,7 @@ class WorkflowEngine:
             _parts = [f"{r}:{c}" for r, c in sorted(_roles.items())]
             logger.info(
                 f"[Supervisor: {supervisor_name}] 上下文: {' | '.join(_parts)}"
-                f" | 总{len(msgs)}条（跳过tool:{tool_count}）"
+                f" | 总{len(msgs)}条"
                 f"{' | 原始需求:' + str(len(orig)) + '字' if orig else ''}"
             )
 

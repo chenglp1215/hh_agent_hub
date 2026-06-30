@@ -67,6 +67,7 @@ async def get_agent(agent_id: int, user=Depends(get_current_user)):
         "reasonix_config": a.reasonix_config, "system_prompt": a.system_prompt,
         "status": a.status, "knowledge_base_ids": a.knowledge_base_ids,
         "supervisor_prompt_template": a.supervisor_prompt_template,
+        "supervisor_prompt_supplement": a.supervisor_prompt_supplement,
         "custom_prompt_override": a.custom_prompt_override,
         "mcp_links": [{"id": ml.id, "mcp_server": {"id": ml.mcp_server.id, "name": ml.mcp_server.name}, "enabled_tools": ml.enabled_tools, "enabled": ml.enabled} for ml in mcp_links],
         "kb_links": [{"id": kl.id, "kb": {"id": kl.kb.id, "name": kl.kb.name}} for kl in kb_links],

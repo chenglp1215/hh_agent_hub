@@ -179,7 +179,7 @@ class WorkflowEngine:
                     injected = f"以下子代理已完成任务。请对照【用户原始需求】，逐项检查是否所有需求点都已满足：\n\n{context_msg}\n\n未满足的继续调度，全部满足后再输出 NEXT_AGENT: end。"
                     msgs.append({"role": "user", "content": injected})
                     worker_context_injected = True
-                    logger.info(f"[Supervisor: {supervisor_name}] 注入 Worker 结果：{context_msg[:200]}...")
+                    logger.info(f"[Supervisor: {supervisor_name}] 注入 Worker 结果：{context_msg[:200].replace(chr(10), ' ')}...")
 
             # 3. 注入原始用户需求作为最后一条消息，利用近因效应确保 Supervisor 不遗忘完整计划
             orig = state.get("_original_user_input", "")

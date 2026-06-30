@@ -16,7 +16,7 @@ _ROUTING_FORMAT = """
 你必须**只返回**一个 JSON 对象，不要返回任何其他内容：
 
 ```json
-{"text": "<你的文字输出>", "next_agent": "<代理名称或end>", "next_agent_msg": "<给子代理的任务描述>"}
+{{"text": "<你的文字输出>", "next_agent": "<代理名称或end>", "next_agent_msg": "<给子代理的任务描述>"}}
 ```
 
 字段说明：
@@ -26,12 +26,12 @@ _ROUTING_FORMAT = """
 
 示例1（调度子代理）：
 ```json
-{"text": "确认第1项已完成，现在调度MDR-运维管理执行第2项。", "next_agent": "MDR-运维管理", "next_agent_msg": "检查线上k8s集群namespace为psso的各个pod运行状态，重点关注mdr-command和mdr-worker下各容器状态是否正常。"}
+{{"text": "确认第1项已完成，现在调度MDR-运维管理执行第2项。", "next_agent": "MDR-运维管理", "next_agent_msg": "检查线上k8s集群namespace为psso的各个pod运行状态，重点关注mdr-command和mdr-worker下各容器状态是否正常。"}}}
 ```
 
 示例2（全部完成）：
 ```json
-{"text": "所有巡检步骤已完成。1.事件处置时间正常 2.Pod状态全部Running 3.日志正常更新 4.无需重启。", "next_agent": "end", "next_agent_msg": ""}
+{{"text": "所有巡检步骤已完成。1.事件处置时间正常 2.Pod状态全部Running 3.日志正常更新 4.无需重启。", "next_agent": "end", "next_agent_msg": ""}}}
 ```"""
 
 DEFAULT_PROMPT_TEMPLATES: Dict[str, Dict[str, str]] = {
@@ -83,22 +83,22 @@ DEFAULT_PROMPT_TEMPLATES: Dict[str, Dict[str, str]] = {
 
 正确（调度子代理）：
 ```json
-{"text": "确认第1项已完成，现在执行第2项检查Pod状态。", "next_agent": "MDR-运维管理", "next_agent_msg": "检查线上k8s集群namespace为psso的各个pod运行状态，重点关注mdr-command和mdr-worker下各容器状态是否正常。"}
+{{"text": "确认第1项已完成，现在执行第2项检查Pod状态。", "next_agent": "MDR-运维管理", "next_agent_msg": "检查线上k8s集群namespace为psso的各个pod运行状态，重点关注mdr-command和mdr-worker下各容器状态是否正常。"}}
 ```
 
 正确（全部完成）：
 ```json
-{"text": "巡检结果汇总：1.事件处置时间正常 2.Pod状态全部Running 3.日志正常更新 4.无需重启。", "next_agent": "end", "next_agent_msg": ""}
+{{"text": "巡检结果汇总：1.事件处置时间正常 2.Pod状态全部Running 3.日志正常更新 4.无需重启。", "next_agent": "end", "next_agent_msg": ""}}
 ```
 
 正确（纯问候）：
 ```json
-{"text": "你好，我是研发任务调度主管，可以帮你调度子代理完成代码分析、审查等任务。", "next_agent": "end", "next_agent_msg": ""}
+{{"text": "你好，我是研发任务调度主管，可以帮你调度子代理完成代码分析、审查等任务。", "next_agent": "end", "next_agent_msg": ""}}
 ```
 
 错误（next_agent_msg 写了思考过程）：
 ```json
-{"text": "...", "next_agent": "MDR-运维管理", "next_agent_msg": "好的，已确认第1项完成，接下来需要检查pod状态。请检查k8s集群中..."}
+{{"text": "...", "next_agent": "MDR-运维管理", "next_agent_msg": "好的，已确认第1项完成，接下来需要检查pod状态。请检查k8s集群中..."}}
 ```
 ↑ next_agent_msg 中的"好的，已确认第1项完成，接下来需要"是思考过程，不应出现。
 
@@ -157,17 +157,17 @@ DEFAULT_PROMPT_TEMPLATES: Dict[str, Dict[str, str]] = {
 
 正确（完成一步，等待确认）：
 ```json
-{"text": "已完成第一步：代码分析。发现3处SQL注入风险，详细报告已生成。", "next_agent": "end", "next_agent_msg": ""}
+{{"text": "已完成第一步：代码分析。发现3处SQL注入风险，详细报告已生成。", "next_agent": "end", "next_agent_msg": ""}}
 ```
 
 正确（用户确认后执行下一步）：
 ```json
-{"text": "继续执行第二步SQL注入修复。", "next_agent": "mdr-code-fixer", "next_agent_msg": "第一步分析发现了3处SQL注入风险，请根据分析结果进行修复。风险如下：xxx,xxx,xxx"}
+{{"text": "继续执行第二步SQL注入修复。", "next_agent": "mdr-code-fixer", "next_agent_msg": "第一步分析发现了3处SQL注入风险，请根据分析结果进行修复。风险如下：xxx,xxx,xxx"}}
 ```
 
 错误（跳过步骤）：
 ```json
-{"text": "分析没有风险，跳过修复。", "next_agent": "end", "next_agent_msg": ""}
+{{"text": "分析没有风险，跳过修复。", "next_agent": "end", "next_agent_msg": ""}}
 ```
 
 ## 核心原则

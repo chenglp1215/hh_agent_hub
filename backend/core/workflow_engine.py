@@ -255,13 +255,11 @@ class WorkflowEngine:
                     result["user_input"] = cleaned
                     result["messages"] = [{"role": "user", "content": cleaned}]
 
-                # 日志：结果摘要 + 路由决策
-                _out_preview = str(output)[:120].replace("\n", " ")
+                # 日志：路由决策（agent_node 已记录完整结果，此处不重复）
                 _task_preview = (cleaned or "")[:80].replace("\n", " ")
                 if next_agent == "end":
-                    logger.info(f"[Supervisor: {supervisor_name}] 完成: {_out_preview}...")
+                    logger.info(f"[Supervisor: {supervisor_name}] 完成")
                 else:
-                    logger.info(f"[Supervisor: {supervisor_name}] 结果: {_out_preview}...")
                     logger.info(f"[Supervisor: {supervisor_name}] 路由决策: {next_agent}, 任务描述: {_task_preview}")
             else:
                 result["next_agent"] = "end"

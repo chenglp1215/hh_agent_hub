@@ -27,6 +27,8 @@ class AgentState(TypedDict):
     _trace_id: NotRequired[str]
     _parent_span_id: NotRequired[str]
     task_id: NotRequired[str]
+    # 原始用户需求（跨轮次保留，供 supervisor 感知完整计划）
+    _original_user_input: NotRequired[str]
 
 
 class WorkflowEngine:

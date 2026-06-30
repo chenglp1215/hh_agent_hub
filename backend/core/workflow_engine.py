@@ -152,11 +152,16 @@ class WorkflowEngine:
                         "trace": trace,
                     }
 
-            # 将前一轮 worker 的结果注入 messages，让 supervisor 感知到子代理已完成任务
+            # 构建 supervisor 上下文：只包含必要信息，不继承 Worker 内部的工具调用消息
             state_with_context = dict(state)
-            msgs = list(state.get("messages", []))
+            msgs = []
 
-            # 每轮注入轮次信息
+            # 1. 当前任务描述（supervisor 上一轮的输出或原始 user_input）
+            task_desc = state.get("user_input", "")
+            if task_desc:
+                msgs.append({"role": "user", "content": task_desc})
+
+            # 2. 每轮注入轮次信息
             remaining = max_supervisor_rounds - rounds
             msgs.append({"role": "system", "content": f"当前第 {rounds + 1} 轮调度，剩余 {remaining} 轮，最多 {max_supervisor_rounds} 轮。"})
 
@@ -176,17 +181,17 @@ class WorkflowEngine:
                     worker_context_injected = True
                     logger.info(f"[Supervisor: {supervisor_name}] 注入 Worker 结果：{context_msg[:200]}...")
 
-            # 注入原始用户需求作为最后一条消息，利用近因效应确保 Supervisor 不遗忘完整计划
+            # 3. 注入原始用户需求作为最后一条消息，利用近因效应确保 Supervisor 不遗忘完整计划
             orig = state.get("_original_user_input", "")
             if orig:
                 msgs.append({"role": "user", "content": f"【用户原始需求】{orig}"})
 
             state_with_context["messages"] = msgs
 
-            # 简洁上下文日志：按角色统计
+            # 简洁上下文日志
             _roles = {}
             for m in msgs:
-                r = getattr(m, "type", "") if hasattr(m, "type") else (m.get("role", "?") if isinstance(m, dict) else "?")
+                r = m.get("role", "?") if isinstance(m, dict) else "?"
                 _roles[r] = _roles.get(r, 0) + 1
             _parts = [f"{r}:{c}" for r, c in sorted(_roles.items())]
             logger.info(
@@ -202,6 +207,8 @@ class WorkflowEngine:
                 _injected_contents = {f"当前第 {rounds + 1} 轮调度，剩余 {remaining} 轮，最多 {max_supervisor_rounds} 轮。"}
                 if worker_context_injected:
                     _injected_contents.add(injected)
+                if orig:
+                    _injected_contents.add(f"【用户原始需求】{orig}")
                 def _is_not_injected(m):
                     content = m.get("content") if isinstance(m, dict) else getattr(m, "content", "")
                     return content not in _injected_contents

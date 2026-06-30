@@ -175,8 +175,10 @@ class WorkflowEngine:
                     worker_outputs.append(f"[{k} 的返回结果]:\n{str(v)[:3000]}")
                 if worker_outputs:
                     context_msg = "\n\n".join(worker_outputs)
-                    msgs.append({"role": "user", "content": f"以下子代理已完成任务。请对照【用户原始需求】，逐项检查是否所有需求点都已满足：\n\n{context_msg}\n\n未满足的继续调度，全部满足后再输出 NEXT_AGENT: end。"})
+                    injected = f"以下子代理已完成任务。请对照【用户原始需求】，逐项检查是否所有需求点都已满足：\n\n{context_msg}\n\n未满足的继续调度，全部满足后再输出 NEXT_AGENT: end。"
+                    msgs.append({"role": "user", "content": injected})
                     worker_context_injected = True
+                    logger.info(f"[Supervisor: {supervisor_name}] 注入 Worker 结果：{context_msg[:200]}...")
 
             state_with_context["messages"] = msgs
 
@@ -186,7 +188,7 @@ class WorkflowEngine:
             if out_msgs:
                 _injected_contents = {f"当前第 {rounds + 1} 轮调度，剩余 {remaining} 轮，最多 {max_supervisor_rounds} 轮。"}
                 if worker_context_injected:
-                    _injected_contents.add(f"以下子代理已完成任务，请根据返回结果判断是否已满足用户需求：\n\n{context_msg}")
+                    _injected_contents.add(injected)
                 def _is_not_injected(m):
                     content = m.get("content") if isinstance(m, dict) else getattr(m, "content", "")
                     return content not in _injected_contents

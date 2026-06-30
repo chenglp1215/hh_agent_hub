@@ -154,12 +154,6 @@ class WorkflowEngine:
             state_with_context = dict(state)
             msgs = list(state.get("messages", []))
 
-            # 注入原始用户需求作为第一条 user 消息，仅供 supervisor 感知完整计划
-            # Worker 节点从 result["messages"] 获取消息，不会包含此注入
-            orig = state.get("_original_user_input", "")
-            if orig:
-                msgs.insert(0, {"role": "user", "content": f"【用户原始需求】{orig}"})
-
             # 每轮注入轮次信息
             remaining = max_supervisor_rounds - rounds
             msgs.append({"role": "system", "content": f"当前第 {rounds + 1} 轮调度，剩余 {remaining} 轮，最多 {max_supervisor_rounds} 轮。"})
@@ -179,6 +173,13 @@ class WorkflowEngine:
                     msgs.append({"role": "user", "content": injected})
                     worker_context_injected = True
                     logger.info(f"[Supervisor: {supervisor_name}] 注入 Worker 结果：{context_msg[:200]}...")
+
+            # 注入原始用户需求作为最后一条消息，利用近因效应确保 Supervisor 不遗忘完整计划
+            # Worker 节点从 result["messages"] 获取消息，不会包含此注入
+            orig = state.get("_original_user_input", "")
+            if orig:
+                msgs.append({"role": "user", "content": f"【用户原始需求】{orig}"})
+                logger.info(f"[Supervisor: {supervisor_name}] 注入原始需求（长度={len(orig)}）")
 
             state_with_context["messages"] = msgs
 

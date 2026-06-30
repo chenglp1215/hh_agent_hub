@@ -33,7 +33,7 @@ class AgentCallLogger:
     MAX_LOG_FILES = 5
 
     def __init__(self):
-        self._level = os.environ.get("AGENT_LOG_LEVEL", "verbose").lower()
+        self._level = os.environ.get("AGENT_LOG_LEVEL", "basic").lower()
         # 详细日志文件路径
         self._detail_log_path = os.environ.get(
             "AGENT_CALL_LOG_FILE",

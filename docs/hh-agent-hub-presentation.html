@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hh-agent-hub — 研发团队多Agent协同平台</title>
+<style>
+/* ===== Reset & Base ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-snap-type:y mandatory}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0f;color:#e4e4e7;overflow-x:hidden;line-height:1.6}
+
+/* ===== Typography ===== */
+h1{font-size:clamp(2.4rem,5vw,4rem);font-weight:800;letter-spacing:-0.03em;line-height:1.1}
+h2{font-size:clamp(1.8rem,3.5vw,2.6rem);font-weight:700;letter-spacing:-0.02em}
+h3{font-size:1.25rem;font-weight:600}
+.gradient-text{background:linear-gradient(135deg,#5e6ad2 0%,#a78bfa 50%,#38bdf8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.gradient-text-warm{background:linear-gradient(135deg,#f97316 0%,#ef4444 50%,#ec4899 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+/* ===== Slide System ===== */
+.slide{min-height:100vh;scroll-snap-align:start;display:flex;align-items:center;justify-content:center;padding:4rem 2rem;position:relative;overflow:hidden}
+.slide-inner{max-width:1200px;width:100%;z-index:1}
+
+/* ===== Animated Background ===== */
+.bg-grid{position:absolute;inset:0;background-image:radial-gradient(circle at 1px 1px,rgba(94,106,210,0.15) 1px,transparent 0);background-size:40px 40px;mask-image:radial-gradient(ellipse at center,black 40%,transparent 70%)}
+.bg-orb{position:absolute;border-radius:50%;filter:blur(120px);opacity:0.15;animation:orbFloat 20s ease-in-out infinite}
+.bg-orb:nth-child(1){width:600px;height:600px;background:#5e6ad2;top:-20%;left:-10%;animation-delay:0s}
+.bg-orb:nth-child(2){width:500px;height:500px;background:#a78bfa;bottom:-15%;right:-10%;animation-delay:-7s}
+.bg-orb:nth-child(3){width:400px;height:400px;background:#38bdf8;top:40%;left:50%;animation-delay:-14s}
+@keyframes orbFloat{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(80px,-60px) scale(1.1)}66%{transform:translate(-40px,40px) scale(0.9)}}
+
+/* ===== Particles ===== */
+.particles{position:absolute;inset:0;pointer-events:none}
+.particle{position:absolute;width:2px;height:2px;background:#5e6ad2;border-radius:50%;animation:particleDrift 8s linear infinite;opacity:0}
+@keyframes particleDrift{0%{opacity:0;transform:translateY(100vh) scale(0)}10%{opacity:1}90%{opacity:1}100%{opacity:0;transform:translateY(-100vh) scale(1)}}
+
+/* ===== Cards ===== */
+.card{background:rgba(24,24,30,0.8);border:1px solid rgba(94,106,210,0.2);border-radius:16px;padding:2rem;backdrop-filter:blur(20px);transition:all 0.3s ease}
+.card:hover{border-color:rgba(94,106,210,0.5);transform:translateY(-2px);box-shadow:0 8px 40px rgba(94,106,210,0.1)}
+.card-accent{border-left:3px solid #5e6ad2}
+.card-icon{font-size:2rem;margin-bottom:1rem;display:block}
+
+/* ===== Stats Grid ===== */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.5rem}
+.stat-card{text-align:center;padding:2rem 1.5rem;background:rgba(24,24,30,0.6);border:1px solid rgba(94,106,210,0.15);border-radius:16px;backdrop-filter:blur(10px)}
+.stat-value{font-size:3rem;font-weight:800;background:linear-gradient(135deg,#5e6ad2,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:block}
+.stat-label{color:#a1a1aa;font-size:0.9rem;margin-top:0.5rem}
+
+/* ===== Comparison Table ===== */
+.table-wrap{overflow-x:auto;border-radius:12px;border:1px solid rgba(94,106,210,0.15)}
+table{width:100%;border-collapse:collapse;font-size:0.875rem}
+th{background:rgba(94,106,210,0.15);padding:1rem;text-align:left;font-weight:600;white-space:nowrap}
+td{padding:0.85rem 1rem;border-bottom:1px solid rgba(255,255,255,0.05)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(94,106,210,0.05)}
+.check{color:#34d399;font-weight:bold}
+.cross{color:#6b7280}
+.partial{color:#fbbf24}
+
+/* ===== Feature Grid ===== */
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem}
+.feature-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin-bottom:1rem;background:rgba(94,106,210,0.15);border:1px solid rgba(94,106,210,0.2)}
+
+/* ===== Flow Diagram ===== */
+.flow-row{display:flex;align-items:center;justify-content:center;gap:0.75rem;flex-wrap:wrap;padding:1rem 0}
+.flow-node{background:rgba(94,106,210,0.15);border:1px solid rgba(94,106,210,0.3);border-radius:12px;padding:1rem 1.5rem;font-weight:600;font-size:0.9rem;text-align:center;min-width:100px}
+.flow-arrow{color:#5e6ad2;font-size:1.5rem;font-weight:bold}
+.flow-node.supervisor{background:rgba(249,115,22,0.15);border-color:rgba(249,115,22,0.3);color:#f97316}
+
+/* ===== Architecture Layers ===== */
+.arch-layer{background:rgba(24,24,30,0.6);border:1px solid rgba(94,106,210,0.15);border-radius:12px;padding:1.5rem;margin-bottom:0.75rem;backdrop-filter:blur(10px);text-align:center}
+.arch-layer.frontend{border-left:3px solid #38bdf8}
+.arch-layer.backend{border-left:3px solid #a78bfa}
+.arch-layer.engine{border-left:3px solid #f97316}
+.arch-layer.data{border-left:3px solid #34d399}
+.arch-layer-title{font-weight:700;margin-bottom:0.5rem}
+.arch-layer-desc{font-size:0.85rem;color:#a1a1aa}
+
+/* ===== Badge ===== */
+.badge{display:inline-block;padding:0.25rem 0.75rem;border-radius:999px;font-size:0.75rem;font-weight:600;margin:0.15rem}
+.badge-primary{background:rgba(94,106,210,0.2);color:#a5b4fc}
+.badge-success{background:rgba(52,211,153,0.2);color:#6ee7b7}
+.badge-warning{background:rgba(251,191,36,0.2);color:#fde68a}
+.badge-danger{background:rgba(248,113,113,0.2);color:#fca5a5}
+
+/* ===== Timeline ===== */
+.timeline{position:relative;padding-left:2.5rem}
+.timeline::before{content:'';position:absolute;left:0.75rem;top:0;bottom:0;width:2px;background:linear-gradient(to bottom,#5e6ad2,#a78bfa,#38bdf8)}
+.timeline-item{position:relative;margin-bottom:2rem}
+.timeline-item::before{content:'';position:absolute;left:-2.05rem;top:0.35rem;width:12px;height:12px;border-radius:50%;background:#5e6ad2;border:2px solid #0a0a0f}
+.timeline-title{font-weight:700;margin-bottom:0.25rem}
+.timeline-desc{font-size:0.875rem;color:#a1a1aa}
+
+/* ===== Nav Dots ===== */
+.nav-dots{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);z-index:100;display:flex;flex-direction:column;gap:0.75rem}
+.nav-dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.2);cursor:pointer;transition:all 0.3s ease;border:none}
+.nav-dot.active{background:#5e6ad2;box-shadow:0 0 12px rgba(94,106,210,0.5);transform:scale(1.3)}
+
+/* ===== Animations ===== */
+.fade-up{opacity:0;transform:translateY(30px);animation:fadeUp 0.8s ease forwards}
+.fade-up:nth-child(2){animation-delay:0.15s}
+.fade-up:nth-child(3){animation-delay:0.3s}
+.fade-up:nth-child(4){animation-delay:0.45s}
+@keyframes fadeUp{to{opacity:1;transform:translateY(0)}}
+
+/* ===== Scenarios ===== */
+.scenario-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.5rem}
+.scenario-card{position:relative;overflow:hidden}
+.scenario-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#5e6ad2,#a78bfa,#38bdf8)}
+
+/* ===== CTA Section ===== */
+.cta-section{text-align:center}
+.cta-btn{display:inline-block;padding:1rem 2.5rem;border-radius:12px;font-weight:700;font-size:1.1rem;text-decoration:none;transition:all 0.3s ease;cursor:pointer;border:none}
+.cta-primary{background:linear-gradient(135deg,#5e6ad2,#7c3aed);color:#fff;box-shadow:0 4px 24px rgba(94,106,210,0.3)}
+.cta-primary:hover{transform:translateY(-2px);box-shadow:0 8px 36px rgba(94,106,210,0.5)}
+.cta-ghost{border:1px solid rgba(94,106,210,0.3);color:#e4e4e7;margin-left:1rem}
+.cta-ghost:hover{background:rgba(94,106,210,0.1)}
+
+/* ===== Footer ===== */
+.footer{text-align:center;padding:2rem;color:#52525b;font-size:0.8rem}
+
+/* ===== Responsive ===== */
+@media(max-width:768px){
+  .slide{padding:3rem 1rem}
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .feature-grid{grid-template-columns:1fr}
+  .nav-dots{right:0.5rem}
+}
+
+/* ===== Print ===== */
+@media print{
+  .slide{min-height:auto;page-break-after:always;scroll-snap-align:none}
+  .nav-dots,.bg-orb,.particles{display:none}
+  body{background:#fff;color:#000}
+}
+</style>
+</head>
+<body>
+
+<!-- Top Navigation -->
+<nav style="position:fixed;top:0;left:0;right:0;z-index:200;background:rgba(10,10,15,0.9);backdrop-filter:blur(20px);border-bottom:1px solid rgba(94,106,210,0.15);padding:0.75rem 2rem;display:flex;justify-content:space-between;align-items:center">
+  <div style="display:flex;align-items:center;gap:0.5rem">
+    <span style="font-weight:700;font-size:1rem;color:#e4e4e7">hh-agent-hub</span>
+    <span class="badge badge-primary" style="font-size:0.7rem">v2.0</span>
+  </div>
+  <div style="display:flex;gap:1.5rem;font-size:0.85rem">
+    <a href="../README.md" style="color:#a1a1aa;text-decoration:none;transition:color 0.2s" onmouseover="this.style.color='#a5b4fc'" onmouseout="this.style.color='#a1a1aa'">README</a>
+    <a href="hh_agent_hub_overview.md" style="color:#a1a1aa;text-decoration:none;transition:color 0.2s" onmouseover="this.style.color='#a5b4fc'" onmouseout="this.style.color='#a1a1aa'">项目介绍</a>
+    <a href="harness-vibecoding-intro.html" style="color:#a1a1aa;text-decoration:none;transition:color 0.2s" onmouseover="this.style.color='#a5b4fc'" onmouseout="this.style.color='#a1a1aa'">工作流演示</a>
+    <a href="../system_design_docs/README.md" style="color:#a1a1aa;text-decoration:none;transition:color 0.2s" onmouseover="this.style.color='#a5b4fc'" onmouseout="this.style.color='#a1a1aa'">设计文档</a>
+  </div>
+</nav>
+
+<!-- Navigation Dots -->
+<nav class="nav-dots" id="navDots"></nav>
+
+<!-- ==================== SLIDE 1: HERO ==================== -->
+<section class="slide" id="s1">
+  <div class="bg-orb"></div><div class="bg-orb"></div><div class="bg-orb"></div>
+  <div class="bg-grid"></div>
+  <div class="particles" id="particles"></div>
+  <div class="slide-inner" style="text-align:center">
+    <div class="fade-up" style="margin-bottom:1rem">
+      <span class="badge badge-primary" style="font-size:0.85rem;padding:0.4rem 1rem">🔬 研发团队内部平台</span>
+    </div>
+    <h1 class="fade-up" style="margin-bottom:1.5rem">
+      多 Agent 协同<br>
+      <span class="gradient-text">重新定义研发自动化</span>
+    </h1>
+    <p class="fade-up" style="font-size:1.2rem;color:#a1a1aa;max-width:700px;margin:0 auto 2rem">
+      不是另一个 ChatBot 平台 —— 而是将 MCP 工具链、团队知识、研发流程<br>
+      串联为<strong style="color:#e4e4e7">可编排、可追踪、可复用</strong>的智能体协同网络
+    </p>
+    <div class="fade-up" style="display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap">
+      <div class="stat-card"><span class="stat-value">5</span><span class="stat-label">种 Agent 类型</span></div>
+      <div class="stat-card"><span class="stat-value">3</span><span class="stat-label">种编排模式</span></div>
+      <div class="stat-card"><span class="stat-value">15</span><span class="stat-label">张数据表设计</span></div>
+      <div class="stat-card"><span class="stat-value">10</span><span class="stat-label">组 API 端点</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 2: THE PROBLEM ==================== -->
+<section class="slide" id="s2">
+  <div class="bg-grid"></div>
+  <div class="slide-inner">
+    <h2 class="fade-up" style="margin-bottom:0.5rem">研发团队的<span class="gradient-text">真实困境</span></h2>
+    <p class="fade-up" style="color:#a1a1aa;margin-bottom:3rem">不是缺工具 —— 而是工具太多、切换太频繁、流程不可见</p>
+
+    <div class="feature-grid fade-up">
+      <div class="card card-accent">
+        <div style="font-size:2rem;margin-bottom:0.75rem">🔄</div>
+        <h3 style="margin-bottom:0.5rem">多系统切换</h3>
+        <p style="color:#a1a1aa;font-size:0.9rem">查一个问题，登录监控 → DB → K8s → Wiki，手动复制粘贴，每次 15-30 分钟</p>
+      </div>
+      <div class="card card-accent">
+        <div style="font-size:2rem;margin-bottom:0.75rem">🧠</div>
+        <h3 style="margin-bottom:0.5rem">知识流失</h3>
+        <p style="color:#a1a1aa;font-size:0.9rem">排查经验全在脑子里，人走经验走，新人从零开始</p>
+      </div>
+      <div class="card card-accent">
+        <div style="font-size:2rem;margin-bottom:0.75rem">🔗</div>
+        <h3 style="margin-bottom:0.5rem">流程断层</h3>
+        <p style="color:#a1a1aa;font-size:0.9rem">需求→设计→开发→审查→测试→部署，每步靠人推进，没有自动化接力</p>
+      </div>
+      <div class="card card-accent">
+        <div style="font-size:2rem;margin-bottom:0.75rem">🔐</div>
+        <h3 style="margin-bottom:0.5rem">权限焦虑</h3>
+        <p style="color:#a1a1aa;font-size:0.9rem">想让 Agent 帮忙查数据库，又怕它执行 DELETE —— 工具级授权缺失</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 3: WHAT IS IT ==================== -->
+<section class="slide" id="s3">
+  <div class="bg-grid"></div>
+  <div class="slide-inner">
+    <h2 class="fade-up" style="margin-bottom:0.5rem">hh-agent-hub <span class="gradient-text">是什么</span></h2>
+    <p class="fade-up" style="color:#a1a1aa;margin-bottom:2.5rem">一句话：用 Agent 编排替代人工在多系统之间切换，让研发流程可自动化、可追踪、可复用</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem">
+      <div class="card fade-up">
+        <div class="feature-icon">📋</div>
+        <h3 style="margin-bottom:0.75rem">平台级资源目录</h3>
+        <p style="color:#a1a1aa;font-size:0.9rem">MCP Server 注册表 + 知识库管理 + Skill 模板库，统一注册、按需选用，打破团队壁垒</p>
+        <div style="margin-top:1rem">
+          <span class="badge badge-primary">MCP 注册</span>
+          <span class="badge badge-success">知识库</span>
+          <span class="badge badge-warning">Skill 模板</span>
+        </div>
+      </div>
+      <div class="card fade-up">
+        <div class="feature-icon">🎯</div>
+        <h3 style="margin-bottom:0.75rem">多 Agent 智能编排</h3>
+        <p style="color:#a1a1aa;font-size:0.9rem">监督者/顺序/图模式 + 并行组 + 人工中断，像搭乐高一样编排你的研发流程</p>
+        <div style="margin-top:1rem">
+          <span class="badge badge-primary">Supervisor</span>
+          <span class="badge badge-success">Sequential</span>
+          <span class="badge badge-warning">Graph</span>
+          <span class="badge badge-danger">Parallel</span>
+        </div>
+      </div>
+      <div class="card fade-up">
+        <div class="feature-icon">🚀</div>
+        <h3 style="margin-bottom:0.75rem">端到端 SDLC</h3>
+        <p style="color:#a1a1aa;font-size:0.9rem">需求分析 → 方案设计 → 编码开发 → 代码审查 → 质量验证 → CI/CD 部署，全流程自动化</p>
+        <div style="margin-top:1rem">
+          <span class="badge badge-primary">Claude Code 深度集成</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 4: AGENT SYSTEM ==================== -->
+<section class="slide" id="s4">
+  <div class="bg-grid"></div>
+  <div class="slide-inner">
+    <h2 class="fade-up" style="margin-bottom:0.25rem">五大 <span class="gradient-text">Agent 类型</span></h2>
+    <p class="fade-up" style="color:#a1a1aa;margin-bottom:2.5rem">业内最全面的 Agent 类型矩阵，覆盖从简单对话到容器化代码工程的完整谱系</p>
+
+    <div class="feature-grid fade-up">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem">
+          <span class="badge badge-success" style="font-size:0.85rem;padding:0.3rem 0.8rem">local</span>
+          <h3 style="margin:0">LangChain ReAct</h3>
+        </div>
+        <p style="color:#a1a1aa;font-size:0.85rem">Worker 进程内执行，LangChain ReAct Agent 模式，适合通用对话、工具调用、知识库检索</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#6b7280">支持 OpenAI / Anthropic / Ollama 多 LLM 后端</p>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem">
+          <span class="badge badge-primary" style="font-size:0.85rem;padding:0.3rem 0.8rem">http</span>
+          <h3 style="margin:0">HTTP 远程服务</h3>
+        </div>
+        <p style="color:#a1a1aa;font-size:0.85rem">对接外部 Agent Chat API，任意实现了 Chat 接口的外部服务均可接入编排</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#6b7280">支持自定义 Headers 认证 + 超时控制</p>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem">
+          <span class="badge badge-warning" style="font-size:0.85rem;padding:0.3rem 0.8rem">a2a</span>
+          <h3 style="margin:0">Agent-to-Agent</h3>
+        </div>
+        <p style="color:#a1a1aa;font-size:0.85rem">A2A 协议 (JSON-RPC) 跨 Agent 通信，自动发现 Agent Card，标准化消息传递</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#6b7280">支持流式响应解析，跨团队 Agent 互联</p>
+      </div>
+      <div class="card" style="border-color:rgba(249,115,22,0.3)">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem">
+          <span class="badge badge-danger" style="font-size:0.85rem;padding:0.3rem 0.8rem">claudecode</span>
+          <h3 style="margin:0">Claude Code SDK</h3>
+        </div>
+        <p style="color:#a1a1aa;font-size:0.85rem">Docker 容器内运行 Claude Code CLI，支持文件读写、命令执行、Git 操作——真正的代码工程 Agent</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#6b7280">独立沙箱 | --rm 自动销毁 | 512MB/1CPU 资源限制</p>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem">
+          <span class="badge badge-primary" style="font-size:0.85rem;padding:0.3rem 0.8rem">reasonix</span>
+          <h3 style="margin:0">Reasonix 分析</h3>
+        </div>
+        <p style="color:#a1a1aa;font-size:0.85rem">DeepSeek 驱动，容器化只读执行，低成本代码分析、Review、报告生成</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#6b7280">只读模式 | 低成本 LLM | 适合高频分析场景</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 5: WORKFLOW ENGINE ==================== -->
+<section class="slide" id="s5">
+  <div class="bg-grid"></div>
+  <div class="slide-inner">
+    <h2 class="fade-up" style="margin-bottom:0.25rem"><span class="gradient-text">工作流编排引擎</span></h2>
+    <p class="fade-up" style="color:#a1a1aa;margin-bottom:2.5rem">基于 LangGraph StateGraph，三种编排模式 + 并行组 + 人工中断，灵活度远超同类产品</p>
+
+    <div class="fade-up" style="margin-bottom:2rem">
+      <div class="flow-row">
+        <div class="flow-node supervisor">🧠 Supervisor</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">Worker A</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node supervisor">🧠 Supervisor</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">Worker B</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node supervisor">✅ End</div>
+      </div>
+      <p style="text-align:center;color:#6b7280;font-size:0.8rem;margin-top:0.5rem">监督者模式：LLM 动态路由，按需分配任务给对应 Worker</p>
+    </div>
+
+    <div class="feature-grid fade-up">
+      <div class="card">
+        <h3 style="margin-bottom:0.5rem">🔀 三种编排模式</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem"><strong>监督者</strong>：LLM 智能路由 | <strong>顺序</strong>：固定流水线 | <strong>图模式</strong>：自定义条件分支 DAG</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:0.5rem">⚡ 并行执行组</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">互不依赖的子任务自动并行，支持 concat/first/merge_by_key 三种合并策略</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:0.5rem">🛑 人工中断确认</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">敏感操作（DB写入/部署/配置变更）触发中断，等待人工审批后继续</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:0.5rem">🛡️ 三种容错策略</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">fail-fast 快速失败 | skip-and-continue 跳过继续 | retry 自动重试（可配置次数+间隔）</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 6: WORKSPACE RELAY ==================== -->
+<section class="slide" id="s6">
+  <div class="bg-grid"></div>
+  <div class="slide-inner">
+    <h2 class="fade-up" style="margin-bottom:0.25rem">工作空间<span class="gradient-text">接力模型</span></h2>
+    <p class="fade-up" style="color:#a1a1aa;margin-bottom:2.5rem">独有设计：Agent 不靠 Prompt 传递大体积产物，通过文件系统共享工作空间实现真正的接力协作</p>
+
+    <div class="fade-up" style="background:rgba(24,24,30,0.8);border:1px solid rgba(94,106,210,0.2);border-radius:16px;padding:2rem;margin-bottom:2rem">
+      <pre style="color:#a5b4fc;font-size:0.8rem;line-height:1.8;overflow-x:auto"><code>/data/workflow_workspaces/{execution_id}/
+├── repos/                    ← 共享代码仓库（按需 clone）
+│   └── myapp/
+├── artifacts/                ← Agent 产出物（按阶段隔离）
+│   ├── 1_designer/
+│   │   └── tech_design.md
+│   ├── 2_developer/
+│   │   └── changed_files.json
+│   └── 3_tester/
+│       └── test_report.json
+├── context.json              ← 执行状态 + 上游摘要（Agent 间协议）
+└── trace.json                ← 完整三层追踪树</code></pre>
+    </div>
+
+    <div class="feature-grid fade-up">
+      <div class="card card-accent">
+        <h3 style="margin-bottom:0.5rem">📝 两层上下文传递</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">Prompt 层：传递摘要/决策 | 文件系统层：传递代码/报告/日志等大体积产物</p>
+      </div>
+      <div class="card card-accent">
+        <h3 style="margin-bottom:0.5rem">🔗 context.json 协议</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">标准化状态文件，上游 Agent 写入摘要和产物列表，下游 Agent 读取后快速了解上下文</p>
+      </div>
+      <div class="card card-accent">
+        <h3 style="margin-bottom:0.5rem">♻️ 智能清理</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">成功保留 7 天 | 失败保留 30 天调试 | 磁盘 > 80% 自动清理旧 workspace</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 7: MCP & RESOURCE CATALOG ==================== -->
+<section class="slide" id="s7">
+  <div class="bg-grid"></div>
+  <div class="slide-inner">
+    <h2 class="fade-up" style="margin-bottom:0.25rem"><span class="gradient-text">平台级</span>资源目录</h2>
+    <p class="fade-up" style="color:#a1a1aa;margin-bottom:2.5rem">MCP Server 注册表 + 知识库 + Skill 模板库，打破团队壁垒，一次注册全局复用</p>
+
+    <div class="feature-grid fade-up">
+      <div class="card">
+        <div class="feature-icon">🔌</div>
+        <h3 style="margin-bottom:0.5rem">MCP Server 注册表</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">Streamable HTTP 协议，各团队独立部署 MCP Server，平台统一注册发现</p>
+        <p style="margin-top:0.5rem;font-size:0.8rem;color:#6b7280">initialize → tools/list → tools/call → ping 心跳</p>
+        <div style="margin-top:0.75rem">
+          <span class="badge badge-primary">MySQL</span>
+          <span class="badge badge-success">K8s</span>
+          <span class="badge badge-warning">监控</span>
+          <span class="badge badge-danger">CI/CD</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="feature-icon">📚</div>
+        <h3 style="margin-bottom:0.5rem">知识库管理</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">Markdown 文档分块 + 关键词检索 + 自动注入 System Prompt</p>
+        <p style="margin-top:0.5rem;font-size:0.8rem;color:#6b7280">v1 策略：按标题分块，SQL LIKE 匹配，无需向量库依赖</p>
+        <div style="margin-top:0.75rem">
+          <span class="badge badge-primary">关键词检索</span>
+          <span class="badge badge-success">标题层级匹配</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="feature-icon">🧩</div>
+        <h3 style="margin-bottom:0.5rem">Skill 模板库</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">标准化 Skill 定义，支持 local/file/url 多种来源，Agent 按需加载</p>
+        <p style="margin-top:0.5rem;font-size:0.8rem;color:#6b7280">排查经验、部署流程、审查检查清单均可模板化</p>
+        <div style="margin-top:0.75rem">
+          <span class="badge badge-warning">可复用</span>
+          <span class="badge badge-primary">可组合</span>
+        </div>
+      </div>
+      <div class="card" style="border-color:rgba(249,115,22,0.3)">
+        <div class="feature-icon">🔐</div>
+        <h3 style="margin-bottom:0.5rem">工具级粒度授权</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">选 MCP Server + 筛选具体工具 + 按 Agent 分配，DBA 终于敢给 Agent 数据库权限了</p>
+        <p style="margin-top:0.5rem;font-size:0.8rem;color:#6b7280">允许 SELECT → ✅ | 禁止 DELETE/DROP → ❌</p>
+        <div style="margin-top:0.75rem">
+          <span class="badge badge-danger">细粒度控制</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 8: OBSERVABILITY ==================== -->
+<section class="slide" id="s8">
+  <div class="bg-grid"></div>
+  <div class="slide-inner">
+    <h2 class="fade-up" style="margin-bottom:0.25rem">三层<span class="gradient-text">执行追踪</span></h2>
+    <p class="fade-up" style="color:#a1a1aa;margin-bottom:2.5rem">工作流执行全程可观测：WebSocket 实时推送 + 文件存储完整追踪树 + DB 索引快速检索</p>
+
+    <div class="fade-up" style="background:rgba(24,24,30,0.8);border:1px solid rgba(94,106,210,0.2);border-radius:16px;padding:2rem;margin-bottom:2rem">
+      <pre style="color:#a5b4fc;font-size:0.8rem;line-height:1.8;overflow-x:auto"><code>
+<span style="color:#6ee7b7">Workflow Execution</span>  (exec_abc123, status: success, duration: 6.2s)
+  ├─ <span style="color:#fde68a">Agent Span</span>: problem_analyzer (local, stage 1, 2.1s)
+  │   ├─ <span style="color:#a5b4fc">LLM Call</span>: gpt-4o, 1240 tokens, 0.8s
+  │   ├─ <span style="color:#fca5a5">Tool Call</span>: db_query, mcp-server-mysql, 0.5s
+  │   └─ <span style="color:#c4b5fd">KB Retrieval</span>: "慢查询分析", 3 chunks, 0.1s
+  ├─ <span style="color:#fde68a">Agent Span</span>: ops_investigator (local, stage 2, 3.8s)
+  │   ├─ <span style="color:#a5b4fc">LLM Call</span>: claude-sonnet-4-6, 2100 tokens, 1.2s
+  │   └─ <span style="color:#fca5a5">Tool Call</span>: k8s_get_pods, mcp-server-k8s, 1.5s
+  └─ <span style="color:#fde68a">Agent Span</span>: report_writer (local, stage 3, 0.3s)
+      └─ <span style="color:#a5b4fc">LLM Call</span>: gpt-4o-mini, 480 tokens, 0.3s</code></pre>
+    </div>
+
+    <div class="feature-grid fade-up">
+      <div class="card card-accent">
+        <h3 style="margin-bottom:0.5rem">📊 文件存追踪树 + DB 存元数据</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">大体积 trace.json 存文件系统，DB 只存索引行，兼顾完整性和查询性能</p>
+      </div>
+      <div class="card card-accent">
+        <h3 style="margin-bottom:0.5rem">🔴 WebSocket 实时推送</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">每个 Span 完成即时推送到前端，工作流执行状态实时可见</p>
+      </div>
+      <div class="card card-accent">
+        <h3 style="margin-bottom:0.5rem">📈 Token 按模型统计</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">每个 LLM Call 追踪 model + tokens + duration，Dashboard 按模型汇总消耗</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 9: COMPETITIVE COMPARISON ==================== -->
+<section class="slide" id="s9">
+  <div class="bg-grid"></div>
+  <div class="slide-inner">
+    <h2 class="fade-up" style="margin-bottom:0.25rem">与开源/商业产品<span class="gradient-text">全面对比</span></h2>
+    <p class="fade-up" style="color:#a1a1aa;margin-bottom:2rem">不是"又一个 AI 平台"——差异化定位在研发全流程的深度</p>
+
+    <div class="fade-up table-wrap" style="margin-bottom:1.5rem">
+      <table>
+        <thead>
+          <tr><th>能力维度</th><th style="color:#a5b4fc">hh-agent-hub</th><th>Dify</th><th>Coze</th><th>LangFlow</th><th>n8n+AI</th><th>OpenAI Swarm</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>多 Agent 编排</strong></td><td class="check">3 种模式</td><td>基础</td><td>基础</td><td>LangGraph</td><td class="cross">—</td><td>实验性</td></tr>
+          <tr><td><strong>Agent 类型</strong></td><td class="check">5 种</td><td>1 种</td><td>1 种</td><td>1 种</td><td>1 种</td><td>1 种</td></tr>
+          <tr><td><strong>MCP 协议</strong></td><td class="check">完整 Client</td><td class="partial">部分</td><td class="cross">—</td><td class="partial">部分</td><td class="cross">—</td><td class="cross">—</td></tr>
+          <tr><td><strong>平台资源目录</strong></td><td class="check">MCP/KB/Skill</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td></tr>
+          <tr><td><strong>工具级粒度授权</strong></td><td class="check">选Server+筛工具</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td></tr>
+          <tr><td><strong>WorkSpace接力</strong></td><td class="check">文件系统接力</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td></tr>
+          <tr><td><strong>人工中断确认</strong></td><td class="check">中断点+审批</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td></tr>
+          <tr><td><strong>执行追踪</strong></td><td class="check">三层Trace+WS</td><td>基础日志</td><td class="cross">—</td><td>LangSmith</td><td>基础</td><td class="cross">—</td></tr>
+          <tr><td><strong>Claude Code 集成</strong></td><td class="check">原生Docker沙箱</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td></tr>
+          <tr><td><strong>容器化Agent执行</strong></td><td class="check">Docker --rm</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td></tr>
+          <tr><td><strong>端到端 SDLC</strong></td><td class="check">完整pipeline</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td></tr>
+          <tr><td><strong>部署方式</strong></td><td class="check">自托管(轻量)</td><td>自托管</td><td>仅云端</td><td>自托管</td><td>自托管</td><td>Python库</td></tr>
+          <tr><td><strong>A2A 协议</strong></td><td class="check">原生支持</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td></tr>
+          <tr><td><strong>企微机器人触发</strong></td><td class="check">WebSocket长连接</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td><td class="cross">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="fade-up" style="text-align:center;color:#6b7280;font-size:0.85rem">
+      <span class="check">✓</span> = 原生支持 &nbsp; <span class="partial">◐</span> = 部分/有限支持 &nbsp; <span class="cross">—</span> = 不支持
+    </p>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 10: WHY US ==================== -->
+<section class="slide" id="s10">
+  <div class="bg-grid"></div>
+  <div class="slide-inner">
+    <h2 class="fade-up" style="margin-bottom:0.25rem">为什么选择<span class="gradient-text"> hh-agent-hub</span></h2>
+    <p class="fade-up" style="color:#a1a1aa;margin-bottom:2.5rem">不做通用 ChatBot 平台，专注研发团队的真实工作流</p>
+
+    <div class="feature-grid fade-up">
+      <div class="card" style="border-color:rgba(94,106,210,0.4)">
+        <div style="font-size:2rem;margin-bottom:0.75rem">🏗️</div>
+        <h3 style="margin-bottom:0.5rem">容器化沙箱执行</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">Claude Code / Reasonix 在独立 Docker 容器中运行，<code>--rm</code> 自动销毁，资源限制（512MB/1CPU），安全隔离</p>
+      </div>
+      <div class="card" style="border-color:rgba(94,106,210,0.4)">
+        <div style="font-size:2rem;margin-bottom:0.75rem">🔒</div>
+        <h3 style="margin-bottom:0.5rem">数据不出内网</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">完全自托管，研发代码、数据库 schema、告警日志全部留在公司网络内，满足企业安全合规要求</p>
+      </div>
+      <div class="card" style="border-color:rgba(94,106,210,0.4)">
+        <div style="font-size:2rem;margin-bottom:0.75rem">🎨</div>
+        <h3 style="margin-bottom:0.5rem">Vue Flow 可视化编排</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">拖拽式工作流设计器，可视化编辑 Agent 节点和条件边，所见即所得的流程编排体验</p>
+      </div>
+      <div class="card" style="border-color:rgba(94,106,210,0.4)">
+        <div style="font-size:2rem;margin-bottom:0.75rem">📦</div>
+        <h3 style="margin-bottom:0.5rem">工作流即应用</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">编排完成的工作流一键发布为应用，对外暴露 Chat API + WebSocket 实时追踪，开箱即用</p>
+      </div>
+      <div class="card" style="border-color:rgba(94,106,210,0.4)">
+        <div style="font-size:2rem;margin-bottom:0.75rem">🧬</div>
+        <h3 style="margin-bottom:0.5rem">多 LLM 后端统一</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">OpenAI + Anthropic + Ollama 统一接入，Agent 级别的模型配置，不同任务用不同模型，成本最优</p>
+      </div>
+      <div class="card" style="border-color:rgba(94,106,210,0.4)">
+        <div style="font-size:2rem;margin-bottom:0.75rem">📐</div>
+        <h3 style="margin-bottom:0.5rem">Linear 设计系统</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">遵循 Linear 设计规范，暗色画布 + 薰衣草蓝强调色，16 个页面 + 8 个组件，专业企业级 UI</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 11: ARCHITECTURE ==================== -->
+<section class="slide" id="s11">
+  <div class="bg-grid"></div>
+  <div class="slide-inner">
+    <h2 class="fade-up" style="margin-bottom:0.25rem"><span class="gradient-text">技术架构</span>总览</h2>
+    <p class="fade-up" style="color:#a1a1aa;margin-bottom:2rem">现代技术栈，模块化分层，水平可扩展</p>
+
+    <div class="fade-up">
+      <div class="arch-layer frontend">
+        <div class="arch-layer-title">🎨 前端层</div>
+        <div class="arch-layer-desc">Vue 3 + TypeScript + Vite + Ant Design Vue + Vue Flow | 16 页面 8 组件</div>
+      </div>
+      <div style="text-align:center;color:#38bdf8;padding:0.25rem">▼</div>
+      <div class="arch-layer backend">
+        <div class="arch-layer-title">⚡ API 网关层 (Nginx + FastAPI)</div>
+        <div class="arch-layer-desc">JWT 认证 + API Key 双通道 | 10 组 API | SSE 流式响应 | WebSocket 实时推送</div>
+      </div>
+      <div style="text-align:center;color:#a78bfa;padding:0.25rem">▼</div>
+      <div class="arch-layer engine">
+        <div class="arch-layer-title">🧠 编排引擎层 (LangGraph Runtime)</div>
+        <div class="arch-layer-desc">配置加载 → 动态构建 StateGraph → 监督者路由 → Worker 执行 → 结果汇总 | 并行组 + 人工中断 + 错误处理</div>
+      </div>
+      <div style="text-align:center;color:#f97316;padding:0.25rem">▼</div>
+      <div class="arch-layer data">
+        <div class="arch-layer-title">💾 数据与基础设施层</div>
+        <div class="arch-layer-desc">MySQL 8.0 + Tortoise ORM + Redis | MCP Client (HTTP) | Docker SDK | Chroma 向量库 | Fernet 加密</div>
+      </div>
+    </div>
+
+    <div class="stat-grid fade-up" style="margin-top:2rem">
+      <div class="stat-card"><span class="stat-value">Python 3.11</span><span class="stat-label">后端语言</span></div>
+      <div class="stat-card"><span class="stat-value">FastAPI</span><span class="stat-label">Web 框架</span></div>
+      <div class="stat-card"><span class="stat-value">LangGraph</span><span class="stat-label">编排引擎</span></div>
+      <div class="stat-card"><span class="stat-value">Docker</span><span class="stat-label">容器化部署</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 12: SCENARIOS ==================== -->
+<section class="slide" id="s12">
+  <div class="bg-grid"></div>
+  <div class="slide-inner">
+    <h2 class="fade-up" style="margin-bottom:0.25rem"><span class="gradient-text">四大应用场景</span></h2>
+    <p class="fade-up" style="color:#a1a1aa;margin-bottom:2.5rem">覆盖研发团队的日常高频工作场景</p>
+
+    <div class="scenario-grid fade-up">
+      <div class="card scenario-card">
+        <div class="card-icon">🚨</div>
+        <h3 style="margin-bottom:0.75rem">线上告警排查</h3>
+        <div class="flow-row" style="justify-content:flex-start;font-size:0.8rem">
+          <span class="badge badge-danger">分析Agent</span>
+          <span style="color:#6b7280">→</span>
+          <span class="badge badge-warning">运维Agent</span>
+          <span style="color:#6b7280">→</span>
+          <span class="badge badge-success">报告生成</span>
+        </div>
+        <p style="color:#a1a1aa;font-size:0.85rem;margin-top:0.75rem">分析 Agent 读知识库 SOP → 运维 Agent 调 MCP 查 DB/K8s → 自动汇总排查报告。15 分钟 → 2 分钟</p>
+      </div>
+      <div class="card scenario-card">
+        <div class="card-icon">💻</div>
+        <h3 style="margin-bottom:0.75rem">需求开发上线</h3>
+        <div class="flow-row" style="justify-content:flex-start;font-size:0.8rem">
+          <span class="badge badge-primary">需求分析</span>
+          <span style="color:#6b7280">→</span>
+          <span class="badge badge-success">方案设计</span>
+          <span style="color:#6b7280">→</span>
+          <span class="badge badge-warning">编码</span>
+          <span style="color:#6b7280">→</span>
+          <span class="badge badge-danger">审查</span>
+          <span style="color:#6b7280">→</span>
+          <span class="badge badge-primary">测试</span>
+          <span style="color:#6b7280">→</span>
+          <span class="badge badge-success">部署</span>
+        </div>
+        <p style="color:#a1a1aa;font-size:0.85rem;margin-top:0.75rem">共享 workspace 接力：designer 写方案 → developer 改代码 → tester 跑测试 → CI/CD 构建部署</p>
+      </div>
+      <div class="card scenario-card">
+        <div class="card-icon">🔍</div>
+        <h3 style="margin-bottom:0.75rem">代码审查</h3>
+        <div class="flow-row" style="justify-content:flex-start;font-size:0.8rem">
+          <span class="badge badge-danger">Claude Code</span>
+          <span style="color:#6b7280">→</span>
+          <span class="badge badge-primary">Reasonix</span>
+          <span style="color:#6b7280">→</span>
+          <span class="badge badge-success">审查报告</span>
+        </div>
+        <p style="color:#a1a1aa;font-size:0.85rem;margin-top:0.75rem">Claude Code 深度分析代码质量+安全 → Reasonix 低成本补充检查 → 结构化 Review 报告输出</p>
+      </div>
+      <div class="card scenario-card">
+        <div class="card-icon">🤖</div>
+        <h3 style="margin-bottom:0.75rem">CI/CD 部署</h3>
+        <div class="flow-row" style="justify-content:flex-start;font-size:0.8rem">
+          <span class="badge badge-warning">构建Agent</span>
+          <span style="color:#6b7280">→</span>
+          <span class="badge badge-danger">🛑人工确认</span>
+          <span style="color:#6b7280">→</span>
+          <span class="badge badge-success">发布Agent</span>
+        </div>
+        <p style="color:#a1a1aa;font-size:0.85rem;margin-top:0.75rem">构建 Agent 编译打包 → 触发人工中断确认 → 审批通过后自动发布。安全 + 自动化兼得</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 13: SDLC PIPELINE ==================== -->
+<section class="slide" id="s13">
+  <div class="bg-grid"></div>
+  <div class="slide-inner">
+    <h2 class="fade-up" style="margin-bottom:0.25rem">端到端 <span class="gradient-text">SDLC 流程</span></h2>
+    <p class="fade-up" style="color:#a1a1aa;margin-bottom:2.5rem">从需求到部署，7 种 Agent 角色接力完成，全流程可追踪</p>
+
+    <div class="timeline fade-up" style="max-width:700px;margin:0 auto">
+      <div class="timeline-item">
+        <div class="timeline-title">📋 Stage 1 — 需求分析 Agent</div>
+        <div class="timeline-desc">解析需求文档，提取功能点、约束条件，输出结构化需求规格</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-title">📐 Stage 2 — 方案设计 Agent (Claude Code)</div>
+        <div class="timeline-desc">阅读现有代码，设计技术方案，写入 workspace 供下游使用</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-title">💻 Stage 3 — 编码开发 Agent (Claude Code)</div>
+        <div class="timeline-desc">读取设计方案，在同一份代码仓库上开发，生成变更文件清单</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-title">🔍 Stage 4 — 代码审查 Agent (Reasonix)</div>
+        <div class="timeline-desc">低成本代码分析，检查规范、安全、性能问题</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-title">🧪 Stage 5 — 质量验证 Agent (a2a)</div>
+        <div class="timeline-desc">调用自动化测试服务，跑测试用例，输出测试报告</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-title">🛑 Stage 5.5 — 人工确认中断</div>
+        <div class="timeline-desc">所有检查通过后，触发人工审批确认，防止自动部署风险</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-title">🚀 Stage 6 — CI/CD 部署 Agent</div>
+        <div class="timeline-desc">构建 → 部署 → 健康检查 → 通知结果</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 14: TRIGGERS ==================== -->
+<section class="slide" id="s14">
+  <div class="bg-grid"></div>
+  <div class="slide-inner">
+    <h2 class="fade-up" style="margin-bottom:0.25rem"><span class="gradient-text">智能触发器</span> — 企微机器人</h2>
+    <p class="fade-up" style="color:#a1a1aa;margin-bottom:2rem">业内唯一支持企业微信智能机器人 WebSocket 长连接的 Agent 平台，群聊/私聊即触发</p>
+
+    <!-- Binding Flow — Detailed Sequence -->
+    <div class="fade-up" style="margin-bottom:2.5rem">
+      <h3 style="margin-bottom:1.25rem;color:#a5b4fc">🔗 握手绑定 — 完整交互协议</h3>
+
+      <!-- Two-column: Left = Platform, Right = WeChat -->
+      <div style="display:grid;grid-template-columns:1fr 60px 1fr;gap:0;align-items:start;margin-bottom:0">
+
+        <!-- ===== LEFT: HH-Agent-Hub Platform ===== -->
+        <div style="padding-right:0.5rem">
+          <div style="text-align:center;margin-bottom:0.75rem">
+            <span class="badge badge-primary" style="font-size:0.85rem;padding:0.4rem 1rem">🖥️ hh-agent-hub 管理平台</span>
+          </div>
+
+          <!-- Step 1 -->
+          <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
+            <div style="width:3px;flex-shrink:0;background:linear-gradient(to bottom,#5e6ad2,#38bdf8);border-radius:2px"></div>
+            <div style="background:rgba(94,106,210,0.08);border:1px solid rgba(94,106,210,0.2);border-radius:10px;padding:0.75rem 1rem;flex:1">
+              <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem">
+                <span class="badge badge-primary" style="font-size:0.7rem">Step 1</span>
+                <strong style="font-size:0.85rem">创建触发器 → 选择应用</strong>
+              </div>
+              <p style="color:#a1a1aa;font-size:0.75rem;margin:0">用户选择关联的 App，点击"生成绑定验证码"</p>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
+            <div style="width:3px;flex-shrink:0;background:linear-gradient(to bottom,#5e6ad2,#38bdf8);border-radius:2px"></div>
+            <div style="background:rgba(94,106,210,0.08);border:1px solid rgba(94,106,210,0.2);border-radius:10px;padding:0.75rem 1rem;flex:1">
+              <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem">
+                <span class="badge badge-primary" style="font-size:0.7rem">Step 2</span>
+                <strong style="font-size:0.85rem">POST /wecom-bot/generate-code</strong>
+              </div>
+              <p style="color:#a1a1aa;font-size:0.75rem;margin:0">后端生成 6 位随机码 <code style="color:#a5b4fc;background:rgba(94,106,210,0.1);padding:0.1rem 0.35rem;border-radius:4px">A3K9X2</code>，写入 Redis <code style="color:#34d399;background:rgba(52,211,153,0.1);padding:0.1rem 0.35rem;border-radius:4px">wecom_bind:A3K9X2</code>，TTL 300s</p>
+            </div>
+          </div>
+
+          <!-- Step 3 — waiting -->
+          <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
+            <div style="width:3px;flex-shrink:0;background:linear-gradient(to bottom,#5e6ad2,#38bdf8);border-radius:2px"></div>
+            <div style="background:rgba(24,24,30,0.4);border:1px dashed rgba(94,106,210,0.2);border-radius:10px;padding:0.75rem 1rem;flex:1">
+              <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem">
+                <span class="badge badge-warning" style="font-size:0.7rem">Step 3</span>
+                <strong style="font-size:0.85rem">前端轮询等待 ⌛</strong>
+              </div>
+              <p style="color:#a1a1aa;font-size:0.75rem;margin:0">每 5 秒 <code style="color:#a5b4fc;background:rgba(94,106,210,0.1);padding:0.1rem 0.35rem;border-radius:4px">GET /bind-status/A3K9X2</code> → Redis 查询 <code style="color:#fbbf24;background:rgba(251,191,36,0.1);padding:0.1rem 0.35rem;border-radius:4px">wecom_bind_result:A3K9X2</code></p>
+            </div>
+          </div>
+
+          <!-- Step 5 — bind result -->
+          <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
+            <div style="width:3px;flex-shrink:0;background:linear-gradient(to bottom,#5e6ad2,#38bdf8);border-radius:2px"></div>
+            <div style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.3);border-radius:10px;padding:0.75rem 1rem;flex:1">
+              <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem">
+                <span class="badge badge-success" style="font-size:0.7rem">Step 5</span>
+                <strong style="font-size:0.85rem">绑定成功 ✓</strong>
+              </div>
+              <p style="color:#a1a1aa;font-size:0.75rem;margin:0">轮询查到 <code style="color:#34d399;background:rgba(52,211,153,0.1);padding:0.1rem 0.35rem;border-radius:4px">wecom_bind_result:A3K9X2</code> → 自动填充 chat_type + chat_id → 保存触发器</p>
+            </div>
+          </div>
+
+          <!-- Step 6 — publish refresh -->
+          <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
+            <div style="width:3px;flex-shrink:0;background:linear-gradient(to bottom,#5e6ad2,#38bdf8);border-radius:2px"></div>
+            <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:10px;padding:0.75rem 1rem;flex:1">
+              <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem">
+                <span class="badge" style="background:rgba(168,85,247,0.2);color:#c4b5fd;font-size:0.7rem">Step 6</span>
+                <strong style="font-size:0.85rem">Redis pub/sub 热更新</strong>
+              </div>
+              <p style="color:#a1a1aa;font-size:0.75rem;margin:0">发布 <code style="color:#c4b5fd;background:rgba(168,85,247,0.1);padding:0.1rem 0.35rem;border-radius:4px">wecom_bot:refresh</code> → wecom-bot 容器无重启加载新映射</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== MIDDLE: Arrows ===== -->
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;position:relative">
+          <div style="position:absolute;top:0;bottom:0;width:2px;background:linear-gradient(to bottom,#5e6ad2,#a78bfa,#38bdf8);border-radius:1px"></div>
+          <div style="background:rgba(94,106,210,0.15);border:1px solid rgba(94,106,210,0.3);border-radius:20px;padding:0.3rem 0.5rem;margin:2.5rem 0">
+            <span style="font-size:0.65rem;color:#a5b4fc">Redis</span>
+          </div>
+          <div style="background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.3);border-radius:20px;padding:0.3rem 0.5rem;margin:4rem 0">
+            <span style="font-size:0.65rem;color:#f97316">WS</span>
+          </div>
+          <div style="background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.3);border-radius:20px;padding:0.3rem 0.5rem;margin:5rem 0">
+            <span style="font-size:0.65rem;color:#34d399">pub/sub</span>
+          </div>
+        </div>
+
+        <!-- ===== RIGHT: WeChat / wecom-bot Side ===== -->
+        <div style="padding-left:0.5rem">
+          <div style="text-align:center;margin-bottom:0.75rem">
+            <span class="badge badge-success" style="font-size:0.85rem;padding:0.4rem 1rem">💬 企业微信 + wecom-bot 容器</span>
+          </div>
+
+          <!-- Empty space for Step 1 -->
+          <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem;visibility:hidden">
+            <div style="width:3px;flex-shrink:0;background:linear-gradient(to bottom,#a78bfa,#f97316);border-radius:2px"></div>
+            <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:10px;padding:0.75rem 1rem;flex:1"><p style="margin:0">&nbsp;</p></div>
+          </div>
+
+          <!-- Empty space for Step 2 -->
+          <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem;visibility:hidden">
+            <div style="width:3px;flex-shrink:0;background:linear-gradient(to bottom,#a78bfa,#f97316);border-radius:2px"></div>
+            <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:10px;padding:0.75rem 1rem;flex:1"><p style="margin:0">&nbsp;</p></div>
+          </div>
+
+          <!-- Step 4 — WeChat side: user sends code -->
+          <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
+            <div style="width:3px;flex-shrink:0;background:linear-gradient(to bottom,#a78bfa,#f97316);border-radius:2px"></div>
+            <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:10px;padding:0.75rem 1rem;flex:1">
+              <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem">
+                <span class="badge" style="background:rgba(168,85,247,0.2);color:#c4b5fd;font-size:0.7rem">Step 4</span>
+                <strong style="font-size:0.85rem">用户在企微发送验证码</strong>
+              </div>
+              <p style="color:#a1a1aa;font-size:0.75rem;margin:0">在群聊/私聊中 @机器人 发送 <code style="color:#c4b5fd;background:rgba(168,85,247,0.1);padding:0.1rem 0.35rem;border-radius:4px">A3K9X2</code></p>
+              <div style="margin-top:0.5rem;background:rgba(168,85,247,0.06);border-radius:6px;padding:0.5rem 0.75rem;font-size:0.7rem;color:#a1a1aa">
+                <strong>wecom-bot 处理：</strong><br>
+                ① aibot SDK 收到 WebSocket 消息回调<br>
+                ② 检查消息是否为纯验证码格式<br>
+                ③ 命中 <code style="color:#c4b5fd">wecom_bind:A3K9X2</code> → 提取 chat_type + chat_id<br>
+                ④ 写入 <code style="color:#34d399">wecom_bind_result:A3K9X2</code>，匹配成功 🎯<br>
+                ⑤ 回复企微："绑定成功！Chat ID: xxx"
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty -->
+          <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem;visibility:hidden">
+            <div style="width:3px;flex-shrink:0;background:linear-gradient(to bottom,#a78bfa,#f97316);border-radius:2px"></div>
+            <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:10px;padding:0.75rem 1rem;flex:1"><p style="margin:0">&nbsp;</p></div>
+          </div>
+
+          <!-- Step 6b — Hot reload -->
+          <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
+            <div style="width:3px;flex-shrink:0;background:linear-gradient(to bottom,#a78bfa,#f97316);border-radius:2px"></div>
+            <div style="background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.2);border-radius:10px;padding:0.75rem 1rem;flex:1">
+              <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem">
+                <span class="badge" style="background:rgba(34,211,238,0.2);color:#67e8f9;font-size:0.7rem">Step 6 →</span>
+                <strong style="font-size:0.85rem">热加载触发器映射</strong>
+              </div>
+              <p style="color:#a1a1aa;font-size:0.75rem;margin:0">收到 <code style="color:#c4b5fd;background:rgba(168,85,247,0.1);padding:0.1rem 0.35rem;border-radius:4px">wecom_bot:refresh</code> → 从 DB 全量加载 → 更新内存 <code style="color:#f97316;background:rgba(249,115,22,0.1);padding:0.1rem 0.35rem;border-radius:4px">_trigger_map</code></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom: one-line summary -->
+      <div style="text-align:center;margin-top:1.25rem;padding:0.75rem 1.5rem;background:rgba(52,211,153,0.06);border:1px solid rgba(52,211,153,0.15);border-radius:10px">
+        <span style="font-size:0.8rem;color:#a1a1aa">🔄 绑定完成后，该群/私聊的任何消息都会通过</span>
+        <span class="badge badge-warning" style="font-size:0.75rem">(chat_type, chat_id)</span>
+        <span style="font-size:0.8rem;color:#a1a1aa">精确匹配到触发器，自动入队执行对应 App 的工作流</span>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="fade-up" style="background:rgba(24,24,30,0.8);border:1px solid rgba(94,106,210,0.2);border-radius:16px;padding:2rem;margin-bottom:2rem">
+      <pre style="color:#a5b4fc;font-size:0.78rem;line-height:1.8;overflow-x:auto"><code>
+<span style="color:#6b7280">┌─────────────────────────────────────────────────────────────────────┐</span>
+<span style="color:#6b7280">│                     企业微信智能机器人                                │</span>
+<span style="color:#6b7280">│                  (企微官方 aibot WebSocket)                           │</span>
+<span style="color:#6b7280">└──────────────────────────┬──────────────────────────────────────────┘</span>
+                           │
+                  <span style="color:#f97316">🔗 WebSocket 长连接</span>
+                  <span style="color:#6b7280">(心跳保持 + 自动重连 + 无限重试)</span>
+                           │
+                           ▼
+<span style="color:#6b7280">┌─────────────────────────────────────────────────────────────────────┐</span>
+<span style="color:#6b7280">│              wecom-bot 容器 (aibot SDK)                              │</span>
+<span style="color:#6b7280">│                                                                      │</span>
+<span style="color:#6b7280">│  ┌─────────────┐  ┌──────────────────┐  ┌──────────────────────┐   │</span>
+<span style="color:#6b7280">│  │ ① 消息接收  │→│ ② 触发器匹配      │→│ ③ 工作流入队         │   │</span>
+<span style="color:#6b7280">│  │  清理@前缀  │  │  (chat_type+id)  │  │  task_queue.enqueue  │   │</span>
+<span style="color:#6b7280">│  └─────────────┘  └──────────────────┘  └──────────┬───────────┘   │</span>
+<span style="color:#6b7280">│                                                     │               │</span>
+<span style="color:#6b7280">│  ┌──────────────────────────────────────────────────┘              │</span>
+<span style="color:#6b7280">│  │                                                                  │</span>
+<span style="color:#6b7280">│  │  ┌──────────────────────┐  ┌────────────────────────────┐      │</span>
+<span style="color:#6b7280">│  └→│ ④ 流式回复            │  │ ⑤ Redis pub/sub 热更新     │      │</span>
+<span style="color:#6b7280">│     │ "思考中..." → 最终结果│  │ 触发器映射无重启刷新       │      │</span>
+<span style="color:#6b7280">│     └──────────────────────┘  └────────────────────────────┘      │</span>
+<span style="color:#6b7280">│                                                                      │</span>
+<span style="color:#6b7280">└──────────────────────────────────────────────────────────────────────┘</span>
+                           │
+                           ▼
+<span style="color:#6b7280">┌──────────────────────────────────────────────────────────────────────┐</span>
+<span style="color:#6b7280">│                         Worker 集群                                   │</span>
+<span style="color:#6b7280">│              Supervisor → Agent A → Agent B → 结果汇总                │</span>
+<span style="color:#6b7280">└──────────────────────────────────────────────────────────────────────┘</span></code></pre>
+    </div>
+
+    <!-- Features -->
+    <div class="feature-grid fade-up">
+      <div class="card card-accent">
+        <div style="font-size:1.5rem;margin-bottom:0.5rem">🔌</div>
+        <h3 style="margin-bottom:0.5rem">WebSocket 长连接</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">基于企微官方 aibot SDK，持久 WebSocket 连接，心跳保持，断开自动重连（无限重试），生产级可靠</p>
+      </div>
+      <div class="card card-accent">
+        <div style="font-size:1.5rem;margin-bottom:0.5rem">🎯</div>
+        <h3 style="margin-bottom:0.5rem">智能消息路由</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">支持群聊/私聊两种模式，(chat_type, chat_id) 精确匹配触发器，自动过滤非文本消息</p>
+      </div>
+      <div class="card card-accent">
+        <div style="font-size:1.5rem;margin-bottom:0.5rem">📡</div>
+        <h3 style="margin-bottom:0.5rem">流式回复体验</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">先回"正在思考..."，工作流完成后自动覆盖为最终结果。支持多轮对话上下文（10条历史窗口）</p>
+      </div>
+      <div class="card card-accent">
+        <div style="font-size:1.5rem;margin-bottom:0.5rem">🔄</div>
+        <h3 style="margin-bottom:0.5rem">热更新触发器映射</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">Redis pub/sub 实时推送触发器变更，wecom-bot 容器无重启热加载新绑定，零停机运维</p>
+      </div>
+      <div class="card card-accent">
+        <div style="font-size:1.5rem;margin-bottom:0.5rem">⏰</div>
+        <h3 style="margin-bottom:0.5rem">定时 + 通知双通道</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">APScheduler 支持 interval/cron 定时触发 + 执行结果通过企微 Webhook 推送到指定群</p>
+      </div>
+      <div class="card card-accent">
+        <div style="font-size:1.5rem;margin-bottom:0.5rem">🔐</div>
+        <h3 style="margin-bottom:0.5rem">验证码握手绑定</h3>
+        <p style="color:#a1a1aa;font-size:0.85rem">平台生成 6 位验证码 → 企微发送 → 自动匹配绑定 → 5分钟 TTL。无需手动输入群ID，安全便捷</p>
+      </div>
+    </div>
+
+    <!-- Trigger Type Comparison -->
+    <div style="margin-top:2.5rem" class="fade-up">
+      <h3 style="margin-bottom:1rem;text-align:center">三种触发器类型对比</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem">
+        <div class="card" style="text-align:center">
+          <span class="badge badge-primary" style="font-size:0.85rem;padding:0.3rem 0.8rem">interval</span>
+          <p style="margin-top:0.75rem;color:#a1a1aa;font-size:0.85rem">间隔触发<br>每 N 分钟/小时/天<br>适合定期巡检</p>
+        </div>
+        <div class="card" style="text-align:center">
+          <span class="badge badge-success" style="font-size:0.85rem;padding:0.3rem 0.8rem">cron</span>
+          <p style="margin-top:0.75rem;color:#a1a1aa;font-size:0.85rem">Cron 表达式<br>精确到分钟级调度<br>适合固定时间任务</p>
+        </div>
+        <div class="card" style="text-align:center;border-color:rgba(168,85,247,0.4)">
+          <span class="badge" style="background:rgba(168,85,247,0.2);color:#c4b5fd;font-size:0.85rem;padding:0.3rem 0.8rem">wecom_bot</span>
+          <p style="margin-top:0.75rem;color:#a1a1aa;font-size:0.85rem">企微机器人触发<br>WebSocket 实时响应<br>群聊/私聊即触发</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 15: DEPLOYMENT ==================== -->
+<section class="slide" id="s15">
+  <div class="bg-grid"></div>
+  <div class="slide-inner">
+    <h2 class="fade-up" style="margin-bottom:0.25rem"><span class="gradient-text">部署架构</span></h2>
+    <p class="fade-up" style="color:#a1a1aa;margin-bottom:2.5rem">Docker Compose 5 容器，Worker 独立可水平扩展</p>
+
+    <div class="fade-up" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:2rem">
+      <div class="card" style="text-align:center">
+        <div style="font-size:2rem;margin-bottom:0.5rem">🔀</div>
+        <h3>Nginx</h3>
+        <p style="font-size:0.8rem;color:#a1a1aa">反向代理 + 负载均衡</p>
+      </div>
+      <div class="card" style="text-align:center">
+        <div style="font-size:2rem;margin-bottom:0.5rem">⚡</div>
+        <h3>main</h3>
+        <p style="font-size:0.8rem;color:#a1a1aa">FastAPI + API 服务</p>
+      </div>
+      <div class="card" style="text-align:center">
+        <div style="font-size:2rem;margin-bottom:0.5rem">🔧</div>
+        <h3>worker × N</h3>
+        <p style="font-size:0.8rem;color:#a1a1aa">工作流执行 + Docker SDK</p>
+      </div>
+      <div class="card" style="text-align:center">
+        <div style="font-size:2rem;margin-bottom:0.5rem">🗄️</div>
+        <h3>MySQL + Redis</h3>
+        <p style="font-size:0.8rem;color:#a1a1aa">持久化 + 缓存</p>
+      </div>
+    </div>
+
+    <div class="fade-up" style="background:rgba(24,24,30,0.8);border:1px solid rgba(94,106,210,0.2);border-radius:16px;padding:2rem">
+      <pre style="color:#34d399;font-size:0.85rem;line-height:1.7"><code><span style="color:#6b7280"># 一键部署</span>
+docker compose up -d
+
+<span style="color:#6b7280"># 水平扩展 Worker</span>
+docker compose scale worker=3
+
+<span style="color:#6b7280"># 查看运行状态</span>
+docker compose ps</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 16: CLOSING ==================== -->
+<section class="slide" id="s16">
+  <div class="bg-orb"></div><div class="bg-orb"></div><div class="bg-orb"></div>
+  <div class="bg-grid"></div>
+  <div class="slide-inner cta-section">
+    <div class="fade-up" style="margin-bottom:1rem">
+      <span class="badge badge-primary" style="font-size:0.9rem;padding:0.5rem 1.2rem">v2.0 — 设计阶段</span>
+    </div>
+    <h1 class="fade-up" style="margin-bottom:1.5rem">
+      准备好<span class="gradient-text">重新定义</span><br>研发团队的工作方式了吗？
+    </h1>
+
+    <p class="fade-up" style="font-size:1.1rem;color:#a1a1aa;max-width:650px;margin:0 auto 2.5rem">
+      将 MCP 工具链、团队知识、研发流程串联为<strong style="color:#e4e4e7">可编排、可追踪、可复用</strong>的智能体协同网络。
+      不是替代研发人员，而是让他们<strong style="color:#a5b4fc">从重复切换中解放出来</strong>，专注于真正需要创造力的工作。
+    </p>
+
+    <div class="fade-up stat-grid" style="max-width:800px;margin:0 auto 2.5rem">
+      <div class="stat-card">
+        <span class="stat-value">5</span>
+        <span class="stat-label">Agent 类型</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value">3</span>
+        <span class="stat-label">编排模式</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value">20</span>
+        <span class="stat-label">设计文档</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value">100+</span>
+        <span class="stat-label">并发会话</span>
+      </div>
+    </div>
+
+    <div class="fade-up" style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap">
+      <a href="system_design_docs/README.md" class="cta-btn cta-primary">📖 查看完整设计文档</a>
+      <a href="https://github.com" class="cta-btn cta-ghost">⭐ GitHub (即将开源)</a>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  hh-agent-hub — 研发团队多 Agent 协同平台 &copy; 2026 | 设计阶段 v2.0 | 技术栈: Python 3.11 + FastAPI + LangGraph + Vue 3 + Docker
+</footer>
+
+<script>
+// Generate particles
+(function(){
+  const container = document.getElementById('particles');
+  if(!container) return;
+  for(let i=0;i<50;i++){
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.left = Math.random()*100+'%';
+    p.style.animationDelay = Math.random()*8+'s';
+    p.style.animationDuration = (6+Math.random()*10)+'s';
+    container.appendChild(p);
+  }
+})();
+
+// Navigation dots
+(function(){
+  const slides = document.querySelectorAll('.slide');
+  const nav = document.getElementById('navDots');
+  slides.forEach((s,i)=>{
+    const dot = document.createElement('button');
+    dot.className = 'nav-dot';
+    dot.title = s.id || `Slide ${i+1}`;
+    dot.onclick = ()=> s.scrollIntoView({behavior:'smooth'});
+    nav.appendChild(dot);
+  });
+
+  const dots = document.querySelectorAll('.nav-dot');
+  const observer = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting){
+        const idx = Array.from(slides).indexOf(e.target);
+        dots.forEach((d,i)=> d.classList.toggle('active',i===idx));
+      }
+    });
+  },{threshold:0.5});
+  slides.forEach(s=>observer.observe(s));
+})();
+
+// Auto-animate stats on scroll
+(function(){
+  const observer = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting) e.target.style.animationPlayState = 'running';
+    });
+  },{threshold:0.3});
+  document.querySelectorAll('.fade-up').forEach(el=>{
+    el.style.animationPlayState = 'paused';
+    observer.observe(el);
+    // Trigger immediately for first slide
+    if(el.closest('#s1')) el.style.animationPlayState = 'running';
+  });
+})();
+</script>
+
+</body>
+</html>

@@ -27,8 +27,17 @@ Thumbs.db
 logs/
 *.log
 
+# Test scripts
+test_chat.py
+tests/
+
 # Data
 data/
 openspec
 outputs
 dev_env
+.claude
+review
+test*.db*
+reasonix.toml
+com-ds

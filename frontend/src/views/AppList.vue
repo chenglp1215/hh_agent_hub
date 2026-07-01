@@ -10,7 +10,7 @@
     </div>
 
     <a-spin :spinning="loading">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
         <a-card v-for="app in filteredApps" :key="app.id" class="hover:border-[#5e6ad2] transition-colors">
           <!-- Header: status + name + API doc -->
           <div class="flex items-start justify-between mb-2">

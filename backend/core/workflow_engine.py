@@ -176,7 +176,14 @@ class WorkflowEngine:
                     worker_outputs.append(f"[{k} 的返回结果]:\n{str(v)[:3000]}")
                 if worker_outputs:
                     context_msg = "\n\n".join(worker_outputs)
-                    injected = f"以下子代理已完成任务。请对照【用户原始需求】，逐项检查是否所有需求点都已满足：\n\n{context_msg}\n\n未满足的继续调度，全部满足后再输出 NEXT_AGENT: end。"
+                    injected = (
+                        f"以下子代理已完成任务。\n\n{context_msg}\n\n"
+                        "请对照【用户原始需求】，逐项检查是否所有需求点都已满足。\n"
+                        "未满足则继续调度下一轮。\n"
+                        "如果全部满足，你的 **text 字段就是给用户的最终回复**——用户看不到子代理的原始输出，只看到你的 text。\n"
+                        "因此 text 必须包含子代理返回的**关键数据、表格、结论**，不能只写一句\"已完成\"或\"所有需求点已满足\"。\n"
+                        "你需要把子代理的输出整理成适合用户阅读的最终答案。"
+                    )
                     msgs.append({"role": "user", "content": injected})
                     worker_context_injected = True
                     logger.info(f"[Supervisor: {supervisor_name}] 注入 Worker 结果：{context_msg[:200].replace(chr(10), ' ')}...")

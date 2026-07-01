@@ -20,7 +20,7 @@ _ROUTING_FORMAT = """
 ```
 
 字段说明：
-- **text**: 你的文字输出（对用户的回复、汇总结果、思考过程等）
+- **text**: 你的文字输出。**当 next_agent 为 "end" 时，text 是用户唯一看到的最终回复——必须包含子代理返回的关键数据、表格等，禁止只写一句"已完成"**。当调度子代理时，写思考过程或中间汇报。
 - **next_agent**: 下一个要调度的代理名称，全部完成时填 `end`
 - **next_agent_msg**: 仅当 next_agent 不为 `end` 时填写——这是给下一个子代理的**精确任务描述**，只写需要它做的这一件事，不要包含你的思考过程、不要写"好的，已完成xxx，接下来xxx"。子代理通过这个字段接收任务。当 next_agent 为 `end` 时此字段填空字符串 `""`
 
@@ -29,9 +29,9 @@ _ROUTING_FORMAT = """
 {{"text": "确认第1项已完成，现在调度MDR-运维管理执行第2项。", "next_agent": "MDR-运维管理", "next_agent_msg": "检查线上k8s集群namespace为psso的各个pod运行状态，重点关注mdr-command和mdr-worker下各容器状态是否正常。"}}
 ```
 
-示例2（全部完成）：
+示例2（全部完成——必须包含关键数据，不能只写"已完成"）：
 ```json
-{{"text": "所有巡检步骤已完成。1.事件处置时间正常 2.Pod状态全部Running 3.日志正常更新 4.无需重启。", "next_agent": "end", "next_agent_msg": ""}}
+{{"text": "## 线上服务器列表\\n\\n| 主机名 | IP地址 | 操作系统 | CPU | 内存 |\\n|--------|--------|----------|-----|------|\\n| server-1 | 10.0.1.1 | CentOS 7.9 | 8核 | 32GB |\\n| server-2 | 10.0.1.2 | Ubuntu 20.04 | 4核 | 16GB |\\n\\n> 共23台，15台成功获取，8台因认证/超时失败。\\n\\n**总结**：集群整体正常，7台认证失败需排查凭证，1台超时需检查网络。", "next_agent": "end", "next_agent_msg": ""}}
 ```"""
 
 DEFAULT_PROMPT_TEMPLATES: Dict[str, Dict[str, str]] = {
@@ -86,9 +86,9 @@ DEFAULT_PROMPT_TEMPLATES: Dict[str, Dict[str, str]] = {
 {{"text": "确认第1项已完成，现在执行第2项检查Pod状态。", "next_agent": "MDR-运维管理", "next_agent_msg": "检查线上k8s集群namespace为psso的各个pod运行状态，重点关注mdr-command和mdr-worker下各容器状态是否正常。"}}
 ```
 
-正确（全部完成）：
+正确（全部完成——text 是给用户的最终回复，必须包含子代理返回的关键数据和表格）：
 ```json
-{{"text": "巡检结果汇总：1.事件处置时间正常 2.Pod状态全部Running 3.日志正常更新 4.无需重启。", "next_agent": "end", "next_agent_msg": ""}}
+{{"text": "## 巡检结果汇总\\n\\n| 检查项 | 状态 | 详情 |\\n|--------|------|------|\\n| 事件处置 | ✅ 正常 | 平均处置 3.2min |\\n| Pod状态 | ✅ 正常 | 全部 Running |\\n| 日志更新 | ✅ 正常 | 最新 2min前 |\\n| 重启需求 | — | 无需重启 |\\n\\n**总结**：4项检查全部通过，系统运行正常。", "next_agent": "end", "next_agent_msg": ""}}
 ```
 
 正确（纯问候）：

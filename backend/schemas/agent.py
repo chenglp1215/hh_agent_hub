@@ -24,6 +24,7 @@ class AgentCreate(BaseModel):
 
 
 class AgentUpdate(BaseModel):
+    name: Optional[str] = None
     display_name: Optional[str] = None
     description: Optional[str] = None
     role: Optional[str] = None

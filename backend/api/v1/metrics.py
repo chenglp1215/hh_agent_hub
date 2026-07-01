@@ -112,11 +112,14 @@ async def get_dashboard_stats(user=Depends(get_current_user)):
         tq = get_task_queue()
         await tq.connect()
         queue_depth = await tq._redis.llen("workflow:queue")
-        # 清理已完成但未从 active_tasks 移除的任务
+        # 清理已完成/已中断的任务
         task_ids = await tq._redis.smembers("workflow:active_tasks")
-        for tid in task_ids:
-            if await tq._redis.exists(f"workflow:result:{tid}"):
-                await tq._redis.srem("workflow:active_tasks", tid)
+        if task_ids:
+            from models.chat_log import ChatLog
+            logged = set(await ChatLog.filter(task_id__in=list(task_ids)).values_list("task_id", flat=True))
+            for tid in task_ids:
+                if tid in logged or await tq._redis.exists(f"workflow:result:{tid}"):
+                    await tq._redis.srem("workflow:active_tasks", tid)
         active_tasks = await tq._redis.scard("workflow:active_tasks")
     except Exception:
         pass

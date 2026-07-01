@@ -26,7 +26,7 @@
             <div class="stat-info">
               <span class="stat-label">{{ card.label }}</span>
               <span class="stat-value" :style="{ color: card.color }">
-                <AnimatedCounter :target="card.value" :duration="1200" :delay="i * 100 + 300" />
+                <AnimatedCounter :target="card.value" :duration="1200" :delay="i * 100 + 300" :formatter="card.formatter" />
               </span>
             </div>
           </div>
@@ -207,6 +207,7 @@ const statCards = computed(() => [
     gradient: 'linear-gradient(135deg, #ff6b6b, #cc5555)',
     glow: '0 0 16px rgba(255,107,107,0.3)',
     color: '#ff6b6b',
+    formatter: formatTokenCount,
   },
 ])
 

@@ -35,6 +35,14 @@
         <span>主控台</span>
       </a-menu-item>
 
+      <a-sub-menu key="apps" class="menu-sub">
+        <template #icon>
+          <span class="menu-icon"><AppstoreOutlined /></span>
+        </template>
+        <template #title>应用管理</template>
+        <a-menu-item key="/apps">应用列表</a-menu-item>
+      </a-sub-menu>
+
       <a-sub-menu key="agents" class="menu-sub">
         <template #icon>
           <span class="menu-icon"><RobotOutlined /></span>
@@ -49,14 +57,6 @@
         </template>
         <template #title>工作流编排</template>
         <a-menu-item key="/workflows">工作流列表</a-menu-item>
-      </a-sub-menu>
-
-      <a-sub-menu key="apps" class="menu-sub">
-        <template #icon>
-          <span class="menu-icon"><AppstoreOutlined /></span>
-        </template>
-        <template #title>应用管理</template>
-        <a-menu-item key="/apps">应用列表</a-menu-item>
       </a-sub-menu>
 
       <a-sub-menu key="triggers" class="menu-sub">

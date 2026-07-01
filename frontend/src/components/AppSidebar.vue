@@ -218,7 +218,7 @@ function handleMenuClick({ key }: { key: string }) {
 .nav-menu {
   background: transparent !important;
   border-inline-end: none !important;
-  padding: 8px 0;
+  padding: 8px 0 56px;
   margin-top: 4px;
 }
 

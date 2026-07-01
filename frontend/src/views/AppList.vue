@@ -45,13 +45,12 @@
 
           <!-- Expandable: workflow agents -->
           <div
-            class="cursor-pointer flex items-center gap-1 text-xs mb-2 transition-colors"
+            class="cursor-pointer flex items-center justify-center py-1 mt-1 transition-colors"
             :class="expandedApps.has(app.id) ? 'text-[#00d4ff]' : 'text-gray-500 hover:text-gray-300'"
             @click="toggleExpand(app)"
           >
-            <RightOutlined class="transition-transform" :class="{ 'rotate-90': expandedApps.has(app.id) }" />
-            <span>工作流详情</span>
-            <a-spin v-if="expandingApps.has(app.id)" size="small" />
+            <DownOutlined class="text-lg transition-transform" :class="{ 'rotate-180': expandedApps.has(app.id) }" />
+            <a-spin v-if="expandingApps.has(app.id)" size="small" class="ml-2" />
           </div>
 
           <template v-if="expandedApps.has(app.id)">
@@ -97,6 +96,23 @@
                 </div>
 
                 <a-empty v-if="!workflowData[app.workflow_id].supervisor_agent_id && workflowData[app.workflow_id].worker_agent_ids.length === 0" :image="null" description="暂无 Agent" />
+              </div>
+
+              <!-- Triggers -->
+              <div v-if="triggersForApp(app.id).length > 0" class="mt-3 pt-3 border-t border-gray-700/50">
+                <p class="text-gray-500 text-xs mb-2">关联触发器 ({{ triggersForApp(app.id).length }})</p>
+                <div class="space-y-1">
+                  <div
+                    v-for="t in triggersForApp(app.id)"
+                    :key="t.id"
+                    class="flex items-center gap-2 px-2 py-1.5 rounded text-sm"
+                  >
+                    <span class="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0" :class="t.enabled ? 'bg-green-500' : 'bg-gray-500'" />
+                    <span class="font-medium truncate flex-1">{{ t.name }}</span>
+                    <a-tag :color="triggerTypeColor(t.trigger_type)" size="small">{{ triggerTypeLabel(t.trigger_type) }}</a-tag>
+                    <span class="text-xs text-gray-500">{{ triggerSchedule(t) }}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </template>
@@ -185,13 +201,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { PlusOutlined, RightOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DownOutlined } from '@ant-design/icons-vue'
 import { appsApi } from '@/api/apps'
 import { workflowsApi } from '@/api/workflows'
 import { agentsApi } from '@/api/agents'
+import { triggersApi } from '@/api/triggers'
 import AgentEditModal from '@/components/AgentEditModal.vue'
 
 const apps = ref<any[]>([])
+const allTriggers = ref<any[]>([])
 const loading = ref(false)
 const search = ref('')
 
@@ -293,6 +311,27 @@ function flowTypeColor(type: string) {
   return map[type] || 'default'
 }
 
+function triggersForApp(appId: number) {
+  return allTriggers.value.filter(t => t.app_id === appId)
+}
+
+function triggerTypeLabel(type: string) {
+  const map: Record<string, string> = { interval: '定时触发', cron: 'Cron 触发', wecom_bot: '企微机器人' }
+  return map[type] || type
+}
+
+function triggerTypeColor(type: string) {
+  const map: Record<string, string> = { interval: 'blue', cron: 'cyan', wecom_bot: 'green' }
+  return map[type] || 'default'
+}
+
+function triggerSchedule(t: any) {
+  if (t.trigger_type === 'interval') return `每 ${t.interval_value} ${t.interval_unit === 'minutes' ? '分钟' : t.interval_unit === 'hours' ? '小时' : '天'}`
+  if (t.trigger_type === 'cron') return t.cron_expression
+  if (t.trigger_type === 'wecom_bot') return t.wecom_chat_type === 'group' ? `群聊: ${t.wecom_chat_id}` : `用户: ${t.wecom_user_id}`
+  return '-'
+}
+
 function copyKey(key: string) {
   navigator.clipboard.writeText(key)
   message.success('已复制到剪贴板')
@@ -355,5 +394,11 @@ const apiParamTableColumns = [
   { title: '说明', dataIndex: 'description', key: 'description' },
 ]
 
-onMounted(fetchList)
+onMounted(async () => {
+  await fetchList()
+  try {
+    const res = await triggersApi.list()
+    allTriggers.value = res.data.data || []
+  } catch { /* ignore */ }
+})
 </script>

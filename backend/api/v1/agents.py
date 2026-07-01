@@ -134,7 +134,7 @@ async def update_agent(agent_id: int, body: AgentUpdate, user=Depends(get_curren
     if not a:
         return error(code=404, message="Agent 不存在")
 
-    updatable = ["display_name", "description", "role", "agent_type",
+    updatable = ["name", "display_name", "description", "role", "agent_type",
                  "llm_config_id", "llm_config", "http_config", "claudecode_config",
                  "a2a_config", "reasonix_config", "system_prompt", "status",
                  "supervisor_prompt_template", "supervisor_prompt_supplement"]

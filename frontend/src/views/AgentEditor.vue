@@ -9,7 +9,7 @@
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="名称" name="name" :rules="[{ required: true, message: '请输入名称' }]">
-              <a-input v-model:value="form.name" :disabled="isEdit" placeholder="data_query_agent" />
+              <a-input v-model:value="form.name" placeholder="data_query_agent" />
             </a-form-item>
           </a-col>
           <a-col :span="12">

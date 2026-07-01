@@ -4,7 +4,7 @@
     <a-card class="max-w-xl">
       <a-form :model="form" layout="vertical" @finish="handleSubmit">
         <a-form-item label="应用名称" name="name" :rules="[{ required: true }]">
-          <a-input v-model:value="form.name" :disabled="isEdit" />
+          <a-input v-model:value="form.name" />
         </a-form-item>
         <a-form-item label="描述">
           <a-textarea v-model:value="form.description" :rows="2" />

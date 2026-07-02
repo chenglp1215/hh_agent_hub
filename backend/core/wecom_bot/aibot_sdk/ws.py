@@ -150,7 +150,9 @@ class WsConnectionManager:
             self._logger.error(f"Failed to create WebSocket connection: {e}")
             if self.on_error:
                 self.on_error(e)
-            await self._schedule_reconnect()
+            # 用新 task 驱动重连，避免 connect → _schedule_reconnect → connect
+            # 的无限 await 链最终触发 RecursionError
+            asyncio.ensure_future(self._schedule_reconnect())
 
     async def _cleanup_ws(self) -> None:
         """清理 WebSocket 连接"""
@@ -337,36 +339,39 @@ class WsConnectionManager:
             self._logger.error(f"Failed to send heartbeat: {e}")
 
     async def _schedule_reconnect(self) -> None:
-        """安排重连"""
-        if (
-            self._max_reconnect_attempts != -1
-            and self._reconnect_attempts >= self._max_reconnect_attempts
-        ):
-            self._logger.error(
-                f"Max reconnect attempts reached ({self._max_reconnect_attempts}), giving up"
+        """安排重连（内部 while 循环自驱动，避免 await 链过深导致 RecursionError）"""
+        while not self._is_manual_close:
+            if (
+                self._max_reconnect_attempts != -1
+                and self._reconnect_attempts >= self._max_reconnect_attempts
+            ):
+                self._logger.error(
+                    f"Max reconnect attempts reached ({self._max_reconnect_attempts}), giving up"
+                )
+                if self.on_error:
+                    self.on_error(Exception("Max reconnect attempts exceeded"))
+                return
+
+            self._reconnect_attempts += 1
+            # 指数退避：1s, 2s, 4s, 8s … 上限 30s
+            delay = min(
+                self._reconnect_base_delay * (2 ** (self._reconnect_attempts - 1)),
+                self._reconnect_max_delay,
             )
-            if self.on_error:
-                self.on_error(Exception("Max reconnect attempts exceeded"))
+
+            self._logger.info(
+                f"Reconnecting in {delay}ms (attempt {self._reconnect_attempts})..."
+            )
+            if self.on_reconnecting:
+                self.on_reconnecting(self._reconnect_attempts)
+
+            await asyncio.sleep(delay / 1000)
+            if self._is_manual_close:
+                return
+
+            await self.connect()
+            # connect 成功 → 新的 _receive_task 已启动，退出重连循环
             return
-
-        self._reconnect_attempts += 1
-        # 指数退避：1s, 2s, 4s, 8s … 上限 30s
-        delay = min(
-            self._reconnect_base_delay * (2 ** (self._reconnect_attempts - 1)),
-            self._reconnect_max_delay,
-        )
-
-        self._logger.info(
-            f"Reconnecting in {delay}ms (attempt {self._reconnect_attempts})..."
-        )
-        if self.on_reconnecting:
-            self.on_reconnecting(self._reconnect_attempts)
-
-        await asyncio.sleep(delay / 1000)
-        if self._is_manual_close:
-            return
-
-        await self.connect()
 
     async def send(self, frame: WsFrame) -> None:
         """

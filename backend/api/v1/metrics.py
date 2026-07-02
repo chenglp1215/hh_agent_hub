@@ -115,7 +115,6 @@ async def get_dashboard_stats(user=Depends(get_current_user)):
         # 清理已完成/已中断的任务
         task_ids = await tq._redis.smembers("workflow:active_tasks")
         if task_ids:
-            from models.chat_log import ChatLog
             logged = set(await ChatLog.filter(task_id__in=list(task_ids)).values_list("task_id", flat=True))
             for tid in task_ids:
                 if tid in logged or await tq._redis.exists(f"workflow:result:{tid}"):
